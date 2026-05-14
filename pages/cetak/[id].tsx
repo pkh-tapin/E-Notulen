@@ -27,9 +27,6 @@ export default function CetakNotulen() {
   const { id } = router.query;
   const [data, setData] = useState<Notulen | null>(null);
   const [loading, setLoading] = useState(true);
-  const [orgName, setOrgName] = useState('PEMERINTAH KOTA/KABUPATEN');
-  const [deptName, setDeptName] = useState('DINAS / INSTANSI');
-  const [showConfig, setShowConfig] = useState(true);
 
   useEffect(() => {
     if (!id) return;
@@ -45,22 +42,21 @@ export default function CetakNotulen() {
   };
 
   const handlePrint = () => {
-    setShowConfig(false);
-    setTimeout(() => window.print(), 200);
+    window.print();
   };
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
-        <p style={{ color: '#6b7280' }}>Memuat...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1e1b4b' }}>
+        <p style={{ color: '#c4b5fd', fontSize: '1.2rem', fontWeight: '500', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>Memuat Data Cerdas...</p>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <p>Notulen tidak ditemukan</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1e1b4b' }}>
+        <p style={{ color: '#f87171', fontSize: '1.2rem' }}>⚠️ Notulen tidak ditemukan</p>
       </div>
     );
   }
@@ -70,244 +66,342 @@ export default function CetakNotulen() {
   return (
     <>
       <Head>
-        <title>Cetak Notulen — {data.judul}</title>
+        <title>Notulen — {data.judul}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Times+New+Roman&display=swap');
 
-          @media print {
-            .no-print { display: none !important; }
-            body { margin: 0; padding: 0; }
-            .print-page { 
-              margin: 0; 
-              padding: 2.5cm 3cm 2cm 3cm;
-              box-shadow: none !important;
-              min-height: auto;
-            }
-          }
-          
+          /* ==============================================================
+             MODE LAYAR (SCREEN) : Glassmorphism Soft Purple & Presentation
+             ============================================================== */
           @media screen {
-            body { background: #e5e7eb; }
-            .print-page {
-              max-width: 21cm;
+            body { 
+              margin: 0; 
+              padding: 0; 
+              background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 100%);
+              background-attachment: fixed;
+              font-family: 'Inter', sans-serif;
+              color: #f3f4f6;
+            }
+            
+            .document-container {
+              max-width: 800px;
               margin: 2rem auto;
-              padding: 2.5cm 3cm 2cm 3cm;
-              background: white;
-              box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+              padding: 2.5rem;
+              background: rgba(255, 255, 255, 0.05);
+              backdrop-filter: blur(16px);
+              -webkit-backdrop-filter: blur(16px);
+              border: 1px solid rgba(255, 255, 255, 0.1);
+              border-radius: 24px;
+              box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            }
+
+            .main-title-wrap {
+              text-align: center;
+              margin-bottom: 2rem;
+              padding-bottom: 1.5rem;
+              border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .badge-top {
+              display: inline-block;
+              padding: 6px 16px;
+              background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+              border-radius: 30px;
+              font-size: 0.8rem;
+              font-weight: 600;
+              letter-spacing: 1px;
+              text-transform: uppercase;
+              margin-bottom: 1rem;
+              box-shadow: 0 4px 15px rgba(109, 40, 217, 0.4);
+            }
+
+            .doc-title { font-size: 1.8rem; font-weight: 700; line-height: 1.3; text-wrap: balance; }
+
+            .section-card {
+              background: rgba(0, 0, 0, 0.2);
+              border-radius: 16px;
+              padding: 1.5rem;
+              margin-bottom: 1.5rem;
+              border: 1px solid rgba(255, 255, 255, 0.05);
+              transition: transform 0.2s;
+            }
+            
+            .section-card:hover { background: rgba(0, 0, 0, 0.25); }
+
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr;
+              gap: 12px;
+            }
+
+            @media (min-width: 600px) {
+              .info-grid { grid-template-columns: 1fr 1fr; }
+            }
+
+            .info-item { display: flex; flex-direction: column; gap: 4px; }
+            .info-label { font-size: 0.85rem; color: #a78bfa; font-weight: 500; text-transform: uppercase; }
+            .info-value { font-size: 1.05rem; font-weight: 500; color: #fff; }
+
+            .section-header {
+              font-size: 1.1rem;
+              color: #c4b5fd;
+              font-weight: 600;
+              margin-bottom: 1rem;
+              display: flex;
+              align-items: center;
+              gap: 8px;
+            }
+
+            .content-text {
+              font-size: 1rem;
+              line-height: 1.7;
+              color: #e5e7eb;
+              white-space: pre-line;
+            }
+
+            /* Hiding formal print elements */
+            .print-only, .ttd-area { display: none !important; }
+
+            /* Floating Print Button */
+            .fab-print {
+              position: fixed;
+              bottom: 30px;
+              right: 30px;
+              background: linear-gradient(135deg, #c084fc, #7e22ce);
+              color: white;
+              border: none;
+              border-radius: 50px;
+              padding: 16px 28px;
+              font-size: 1rem;
+              font-weight: 600;
+              cursor: pointer;
+              box-shadow: 0 10px 25px rgba(126, 34, 206, 0.5), inset 0 2px 0 rgba(255,255,255,0.2);
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+              z-index: 100;
+            }
+            .fab-print:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 15px 35px rgba(126, 34, 206, 0.6); }
+            
+            /* Responsive Peserta Table for Screen */
+            .peserta-table { width: 100%; border-collapse: collapse; }
+            .peserta-table th { text-align: left; padding: 10px; color: #a78bfa; border-bottom: 1px solid rgba(255,255,255,0.1); }
+            .peserta-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+          }
+
+          /* ==============================================================
+             MODE CETAK (PRINT) : Formal Office Laporan Standar
+             ============================================================== */
+          @media print {
+            @page { margin: 2cm; size: A4 portrait; }
+            
+            body { 
+              background: white; 
+              color: black; 
+              font-family: 'Times New Roman', Times, serif; 
+              font-size: 12pt;
+            }
+
+            .screen-only, .fab-print { display: none !important; }
+            
+            .document-container {
+              max-width: 100%;
+              margin: 0;
+              padding: 0;
+              background: transparent;
+              border: none;
+              box-shadow: none;
+              backdrop-filter: none;
+            }
+
+            .main-title-wrap {
+              text-align: center;
+              margin-bottom: 30px;
+            }
+
+            .print-title {
+              font-size: 14pt;
+              font-weight: bold;
+              text-decoration: underline;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+            }
+            .print-subtitle { font-size: 12pt; font-weight: bold; margin-top: 5px; }
+
+            .section-card { margin-bottom: 15px; padding: 0; background: transparent; border: none; }
+
+            /* Formal Info Table Layout */
+            .info-table-print {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 20px;
+              line-height: 1.5;
+            }
+            .info-table-print td { vertical-align: top; padding: 4px 0; }
+            .it-label { width: 25%; font-weight: normal; }
+            .it-colon { width: 3%; text-align: center; }
+            .it-value { width: 72%; }
+
+            .section-header {
+              font-size: 12pt;
+              font-weight: bold;
+              margin: 20px 0 10px 0;
+              text-transform: uppercase;
+            }
+
+            .content-text {
+              text-align: justify;
+              line-height: 1.5;
+              white-space: pre-line;
+            }
+
+            /* Formal Peserta Table */
+            .peserta-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 10px;
+              page-break-inside: avoid;
+            }
+            .peserta-table th, .peserta-table td {
+              border: 1px solid black;
+              padding: 6px 10px;
+              font-size: 11pt;
+            }
+            .peserta-table th { background: transparent; font-weight: bold; text-align: center; }
+
+            /* TTD Area */
+            .ttd-area {
+              display: flex;
+              justify-content: space-between;
+              margin-top: 60px;
+              page-break-inside: avoid;
+            }
+            .ttd-box { width: 45%; text-align: center; }
+            .ttd-label { font-size: 12pt; margin-bottom: 80px; }
+            .ttd-name { font-size: 12pt; font-weight: bold; text-decoration: underline; }
+            .ttd-nip { font-size: 11pt; margin-top: 3px; }
+
+            .print-footer {
+              margin-top: 40px;
+              padding-top: 10px;
+              border-top: 1px solid #000;
+              font-size: 9pt;
+              text-align: center;
+              font-style: italic;
             }
           }
-
-          .print-page {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.6;
-            color: #000;
-          }
-
-          .kop-surat {
-            border-bottom: 3px double #000;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-          }
-
-          .kop-logo {
-            width: 80px;
-            height: 80px;
-            border: 2px solid #000;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24pt;
-            font-weight: bold;
-            flex-shrink: 0;
-          }
-
-          .kop-text { text-align: center; flex: 1; }
-          .kop-org { font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-          .kop-dept { font-size: 13pt; font-weight: bold; text-transform: uppercase; }
-          .kop-alamat { font-size: 9pt; margin-top: 3px; }
-
-          .notulen-title {
-            text-align: center;
-            font-size: 13pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border: 2px solid #000;
-            padding: 8px 20px;
-            margin: 20px auto;
-            display: inline-block;
-          }
-
-          .title-wrap {
-            text-align: center;
-            margin-bottom: 20px;
-          }
-
-          .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-          }
-
-          .info-table td {
-            padding: 4px 8px;
-            vertical-align: top;
-            font-size: 11pt;
-          }
-
-          .info-table .label { width: 35%; font-weight: 500; }
-          .info-table .colon { width: 3%; }
-          .info-table .value { width: 62%; }
-
-          .section-title {
-            font-size: 12pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 20px 0 8px 0;
-            border-bottom: 1px solid #000;
-            padding-bottom: 4px;
-          }
-
-          .content-text {
-            text-align: justify;
-            font-size: 11pt;
-            line-height: 1.8;
-            white-space: pre-line;
-          }
-
-          .peserta-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11pt;
-            margin-top: 8px;
-          }
-
-          .peserta-table th {
-            background: #f3f4f6;
-            border: 1px solid #666;
-            padding: 5px 10px;
-            font-weight: bold;
-            text-align: center;
-          }
-
-          .peserta-table td {
-            border: 1px solid #666;
-            padding: 5px 10px;
-          }
-
-          .ttd-area {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            margin-top: 40px;
-          }
-
-          .ttd-box { text-align: center; }
-          .ttd-label { font-size: 11pt; margin-bottom: 60px; }
-          .ttd-name { font-size: 11pt; font-weight: bold; border-top: 1px solid #000; padding-top: 5px; display: inline-block; min-width: 160px; }
-          .ttd-nip { font-size: 10pt; margin-top: 2px; }
         `}</style>
       </Head>
 
-      {/* Config Panel - screen only */}
-      {showConfig && (
-        <div className="no-print" style={{ background: '#1e40af', padding: '16px', color: 'white' }}>
-          <div style={{ maxWidth: '21cm', margin: '0 auto', display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', marginBottom: '4px', opacity: 0.8 }}>Nama Organisasi/Pemerintah</label>
-              <input value={orgName} onChange={e => setOrgName(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '4px', border: 'none', fontSize: '13px', width: '280px' }} />
+      <button className="fab-print" onClick={handlePrint}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+        Cetak Laporan
+      </button>
+
+      <div className="document-container">
+        {/* ================= HEADER ================= */}
+        <div className="main-title-wrap">
+          {/* Screen Only Badge */}
+          <div className="screen-only badge-top">Notulen Rapat</div>
+          <div className="screen-only doc-title">{data.judul}</div>
+
+          {/* Print Only Title */}
+          <div className="print-only print-title">NOTULEN RAPAT</div>
+          <div className="print-only print-subtitle">{data.judul}</div>
+        </div>
+
+        {/* ================= INFORMASI RAPAT ================= */}
+        <div className="section-card">
+          <div className="screen-only section-header">📌 Detail Kegiatan</div>
+          
+          {/* Mode Layar (Grid) */}
+          <div className="screen-only info-grid">
+            <div className="info-item">
+              <span className="info-label">Tanggal</span>
+              <span className="info-value">
+                {data.tanggal ? format(parseISO(data.tanggal), 'EEEE, dd MMMM yyyy', { locale: idLocale }) : '-'}
+              </span>
             </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', marginBottom: '4px', opacity: 0.8 }}>Nama Dinas/Instansi</label>
-              <input value={deptName} onChange={e => setDeptName(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '4px', border: 'none', fontSize: '13px', width: '280px' }} />
+            <div className="info-item">
+              <span className="info-label">Waktu</span>
+              <span className="info-value">
+                {data.waktu_mulai || '-'} {data.waktu_selesai ? ` - ${data.waktu_selesai} WIB` : ' WIB'}
+              </span>
             </div>
-            <button onClick={handlePrint}
-              style={{ padding: '8px 20px', background: 'white', color: '#1e40af', borderRadius: '4px', border: 'none', fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>
-              🖨️ Cetak Sekarang
-            </button>
+            <div className="info-item">
+              <span className="info-label">Tempat</span>
+              <span className="info-value">{data.tempat || '-'}</span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">Pimpinan Rapat</span>
+              <span className="info-value">{data.pimpinan_rapat || '-'}</span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">Notulis</span>
+              <span className="info-value">{data.notulis || '-'}</span>
+            </div>
           </div>
-        </div>
-      )}
 
-      <div className="print-page">
-        {/* KOP SURAT */}
-        <div className="kop-surat">
-          <div className="kop-logo">🏛️</div>
-          <div className="kop-text">
-            <div className="kop-org">{orgName}</div>
-            <div className="kop-dept">{deptName}</div>
-            <div className="kop-alamat">
-              Jl. [Alamat Kantor], Telp. (0511) XXXXXXX, Fax. (0511) XXXXXXX
-            </div>
-          </div>
-        </div>
-
-        {/* JUDUL */}
-        <div className="title-wrap">
-          <div className="notulen-title">NOTULEN RAPAT</div>
-          <div style={{ fontSize: '12pt', fontWeight: 'bold', marginTop: '8px' }}>{data.judul}</div>
-        </div>
-
-        {/* INFO RAPAT */}
-        <table className="info-table">
-          <tbody>
-            <tr>
-              <td className="label">Hari, Tanggal</td>
-              <td className="colon">:</td>
-              <td className="value">
-                {data.tanggal ? format(parseISO(data.tanggal), 'EEEE', { locale: idLocale }) + ', ' + formatDate(data.tanggal) : '-'}
-              </td>
-            </tr>
-            <tr>
-              <td className="label">Waktu</td>
-              <td className="colon">:</td>
-              <td className="value">
-                {data.waktu_mulai || '-'}
-                {data.waktu_selesai ? ` s.d. ${data.waktu_selesai} WIB` : ' WIB'}
-              </td>
-            </tr>
-            <tr>
-              <td className="label">Tempat</td>
-              <td className="colon">:</td>
-              <td className="value">{data.tempat || '-'}</td>
-            </tr>
-            <tr>
-              <td className="label">Pimpinan Rapat</td>
-              <td className="colon">:</td>
-              <td className="value">{data.pimpinan_rapat || '-'}</td>
-            </tr>
-            <tr>
-              <td className="label">Notulis</td>
-              <td className="colon">:</td>
-              <td className="value">{data.notulis || '-'}</td>
-            </tr>
-            {data.agenda && (
+          {/* Mode Cetak (Tabel Formal) */}
+          <table className="print-only info-table-print">
+            <tbody>
               <tr>
-                <td className="label">Agenda</td>
-                <td className="colon">:</td>
-                <td className="value">{data.agenda}</td>
+                <td className="it-label">Hari, Tanggal</td>
+                <td className="it-colon">:</td>
+                <td className="it-value">{data.tanggal ? format(parseISO(data.tanggal), 'EEEE', { locale: idLocale }) + ', ' + formatDate(data.tanggal) : '-'}</td>
               </tr>
-            )}
-          </tbody>
-        </table>
+              <tr>
+                <td className="it-label">Waktu</td>
+                <td className="it-colon">:</td>
+                <td className="it-value">{data.waktu_mulai || '-'} {data.waktu_selesai ? ` s.d. ${data.waktu_selesai} WIB` : ' WIB'}</td>
+              </tr>
+              <tr>
+                <td className="it-label">Tempat</td>
+                <td className="it-colon">:</td>
+                <td className="it-value">{data.tempat || '-'}</td>
+              </tr>
+              <tr>
+                <td className="it-label">Pimpinan Rapat</td>
+                <td className="it-colon">:</td>
+                <td className="it-value">{data.pimpinan_rapat || '-'}</td>
+              </tr>
+              <tr>
+                <td className="it-label">Notulis</td>
+                <td className="it-colon">:</td>
+                <td className="it-value">{data.notulis || '-'}</td>
+              </tr>
+              {data.agenda && (
+                <tr>
+                  <td className="it-label">Agenda</td>
+                  <td className="it-colon">:</td>
+                  <td className="it-value">{data.agenda}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {/* PESERTA */}
+        {/* Agenda (Screen Only, print already has it in table) */}
+        {data.agenda && (
+          <div className="screen-only section-card">
+            <div className="section-header">🎯 Agenda</div>
+            <div className="content-text">{data.agenda}</div>
+          </div>
+        )}
+
+        {/* ================= PESERTA ================= */}
         {pesertaList.length > 0 && (
-          <>
-            <div className="section-title">Peserta Rapat</div>
+          <div className="section-card">
+            <div className="section-header">👥 Daftar Peserta</div>
             <table className="peserta-table">
               <thead>
                 <tr>
-                  <th style={{ width: '8%' }}>No.</th>
-                  <th style={{ width: '50%' }}>Nama</th>
+                  <th style={{ width: '8%', textAlign: 'center' }}>No.</th>
+                  <th style={{ width: '45%' }}>Nama</th>
                   <th style={{ width: '27%' }}>Jabatan</th>
-                  <th style={{ width: '15%' }}>Tanda Tangan</th>
+                  <th className="print-only" style={{ width: '20%' }}>Tanda Tangan</th>
                 </tr>
               </thead>
               <tbody>
@@ -316,55 +410,55 @@ export default function CetakNotulen() {
                     <td style={{ textAlign: 'center' }}>{i + 1}.</td>
                     <td>{p}</td>
                     <td></td>
-                    <td></td>
+                    <td className="print-only"></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </>
+          </div>
         )}
 
-        {/* ISI NOTULEN */}
+        {/* ================= JALANNYA RAPAT ================= */}
         {data.isi_notulen && (
-          <>
-            <div className="section-title">Jalannya Rapat</div>
+          <div className="section-card">
+            <div className="section-header">📝 Pembahasan / Jalannya Rapat</div>
             <div className="content-text">{data.isi_notulen}</div>
-          </>
+          </div>
         )}
 
-        {/* KESIMPULAN */}
+        {/* ================= KESIMPULAN ================= */}
         {data.kesimpulan && (
-          <>
-            <div className="section-title">Kesimpulan</div>
+          <div className="section-card">
+            <div className="section-header">✅ Kesimpulan</div>
             <div className="content-text">{data.kesimpulan}</div>
-          </>
+          </div>
         )}
 
-        {/* TINDAK LANJUT */}
+        {/* ================= TINDAK LANJUT ================= */}
         {data.tindak_lanjut && (
-          <>
-            <div className="section-title">Tindak Lanjut</div>
+          <div className="section-card">
+            <div className="section-header">🚀 Tindak Lanjut</div>
             <div className="content-text">{data.tindak_lanjut}</div>
-          </>
+          </div>
         )}
 
-        {/* TTD */}
-        <div className="ttd-area" style={{ marginTop: '50px' }}>
+        {/* ================= TANDA TANGAN (PRINT ONLY) ================= */}
+        <div className="print-only ttd-area">
           <div className="ttd-box">
             <div className="ttd-label">Notulis,</div>
             <div className="ttd-name">{data.notulis || '_______________________'}</div>
-            <div className="ttd-nip">NIP. ________________________</div>
+            {data.notulis && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
           <div className="ttd-box">
             <div className="ttd-label">Pimpinan Rapat,</div>
             <div className="ttd-name">{data.pimpinan_rapat || '_______________________'}</div>
-            <div className="ttd-nip">NIP. ________________________</div>
+            {data.pimpinan_rapat && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
         </div>
 
-        {/* Footer */}
-        <div style={{ marginTop: '30px', paddingTop: '10px', borderTop: '1px solid #ccc', fontSize: '9pt', color: '#666', textAlign: 'center' }}>
-          Dokumen ini digenerate oleh NotulenAI • ID: {data.id} • {data.created_at ? formatDate(data.created_at) : ''}
+        {/* ================= FOOTER CETAK ================= */}
+        <div className="print-only print-footer">
+          Digenerate oleh Smart System NotulenAI • ID Dokumen: {data.id} • {data.created_at ? formatDate(data.created_at) : ''}
         </div>
       </div>
     </>
