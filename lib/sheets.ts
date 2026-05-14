@@ -27,7 +27,7 @@ export async function getAllNotulen() {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   const rows = await sheet.getRows();
-  return rows.map(row => row.toObject());
+ return rows.map((row: any) => row.toObject());
 }
 
 export async function saveNotulen(data: any) {
