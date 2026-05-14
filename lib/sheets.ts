@@ -47,3 +47,31 @@ export async function saveNotulen(data: any) {
   await sheet.addRow(record);
   return record;
 }
+export async function getNotulenByDate(date: string) {
+  const doc = await getDoc();
+  // Gunakan fallback addSheet agar tidak error jika sheet belum ada
+  const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
+  const rows = await sheet.getRows();
+  
+  // Filter data berdasarkan kolom 'tanggal'
+  const filteredRows = rows.filter((r: any) => r.get('tanggal') === date);
+  return filteredRows.map((row: any) => row.toObject());
+}
+
+export async function deleteNotulen(id: string) {
+  const doc = await getDoc();
+  const sheet = doc.sheetsByTitle['Notulen'];
+  
+  if (!sheet) return false; // Jika sheet tidak ada, batalkan
+  
+  const rows = await sheet.getRows();
+  // Cari baris berdasarkan ID
+  const row = rows.find((r: any) => r.get('id') === id);
+  
+  if (row) {
+    await row.delete(); // Hapus baris dari Google Sheets
+    return true;
+  }
+  
+  return false;
+}
