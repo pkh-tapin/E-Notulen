@@ -35,7 +35,7 @@ export async function saveNotulen(data: any) {
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   if (data.id) {
     const rows = await sheet.getRows();
-    const row = rows.find(r => r.get('id') === data.id);
+    const row = rows.find((r: any) => r.get('id') === data.id);
     if (row) {
       Object.assign(row, { ...data, updated_at: new Date().toISOString() });
       await row.save();
