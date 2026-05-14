@@ -25,7 +25,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       if (id) {
         const all = await getAllNotulen();
-        const found = all.find(n => n.id === id);
+        const found = all.find((n: any) => n.id === id);
         if (!found) return res.status(404).json({ error: 'Notulen tidak ditemukan' });
         return res.status(200).json(found);
       }
