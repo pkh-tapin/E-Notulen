@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
 import { id as idLocale } from 'date-fns/locale';
 
@@ -22,14 +23,12 @@ interface Notulen {
   created_at: string;
 }
 
-export default function CetakNotulen() {
+export default function LihatNotulen() {
   const router = useRouter();
   const { id } = router.query;
   const [data, setData] = useState<Notulen | null>(null);
   const [loading, setLoading] = useState(true);
-  const [orgName, setOrgName] = useState('PEMERINTAH KOTA/KABUPATEN');
-  const [deptName, setDeptName] = useState('DINAS / INSTANSI');
-  const [showConfig, setShowConfig] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -44,23 +43,52 @@ export default function CetakNotulen() {
     catch { return d; }
   };
 
-  const handlePrint = () => {
-    setShowConfig(false);
-    setTimeout(() => window.print(), 200);
+  // Fitur Pintar: Salin Semua Teks Notulen dengan Format Rapi
+  const handleCopyText = () => {
+    if (!data) return;
+    
+    const textToCopy = `
+NOTULEN RAPAT: ${data.judul}
+=========================================
+Hari, Tanggal : ${data.tanggal ? format(parseISO(data.tanggal), 'EEEE, dd MMMM yyyy', { locale: idLocale }) : '-'}
+Waktu         : ${data.waktu_mulai || '-'} s.d. ${data.waktu_selesai || '-'} WIB
+Tempat        : ${data.tempat || '-'}
+Pimpinan      : ${data.pimpinan_rapat || '-'}
+Notulis       : ${data.notulis || '-'}
+
+AGENDA:
+${data.agenda || '-'}
+
+PESERTA:
+${data.peserta ? data.peserta.split(/[\n,]+/).map((p, i) => `${i + 1}. ${p.trim()}`).join('\n') : '-'}
+
+JALANNYA RAPAT:
+${data.isi_notulen || '-'}
+
+KESIMPULAN:
+${data.kesimpulan || '-'}
+
+TINDAK LANJUT:
+${data.tindak_lanjut || '-'}
+    `.trim();
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500); // Reset tulisan copy setelah 2.5 detik
   };
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
-        <p style={{ color: '#6b7280' }}>Memuat...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1e1b4b' }}>
+        <p style={{ color: '#c4b5fd', fontSize: '1.2rem', fontWeight: '500', animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite' }}>Memuat Data Presentasi...</p>
       </div>
     );
   }
 
   if (!data) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-        <p>Notulen tidak ditemukan</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1e1b4b' }}>
+        <p style={{ color: '#f87171', fontSize: '1.2rem' }}>⚠️ Notulen tidak ditemukan</p>
       </div>
     );
   }
@@ -70,301 +98,311 @@ export default function CetakNotulen() {
   return (
     <>
       <Head>
-        <title>Cetak Notulen — {data.judul}</title>
+        <title>Lihat Notulen — {data.judul}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <style>{`
-          @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap');
+          @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-          @media print {
-            .no-print { display: none !important; }
-            body { margin: 0; padding: 0; }
-            .print-page { 
-              margin: 0; 
-              padding: 2.5cm 3cm 2cm 3cm;
-              box-shadow: none !important;
-              min-height: auto;
-            }
+          body { 
+            margin: 0; 
+            padding: 0; 
+            background: linear-gradient(135deg, #0f172a 0%, #312e81 100%);
+            background-attachment: fixed;
+            font-family: 'Inter', sans-serif;
+            color: #f3f4f6;
           }
           
-          @media screen {
-            body { background: #e5e7eb; }
-            .print-page {
-              max-width: 21cm;
-              margin: 2rem auto;
-              padding: 2.5cm 3cm 2cm 3cm;
-              background: white;
-              box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            }
+          .presentation-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
           }
 
-          .print-page {
-            font-family: 'Times New Roman', Times, serif;
-            font-size: 12pt;
-            line-height: 1.6;
-            color: #000;
+          /* Glassmorphism Cards */
+          .glass-panel {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
           }
 
-          .kop-surat {
-            border-bottom: 3px double #000;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-          }
-
-          .kop-logo {
-            width: 80px;
-            height: 80px;
-            border: 2px solid #000;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24pt;
-            font-weight: bold;
-            flex-shrink: 0;
-          }
-
-          .kop-text { text-align: center; flex: 1; }
-          .kop-org { font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; }
-          .kop-dept { font-size: 13pt; font-weight: bold; text-transform: uppercase; }
-          .kop-alamat { font-size: 9pt; margin-top: 3px; }
-
-          .notulen-title {
+          .header-hero {
+            padding: 3rem 2rem;
             text-align: center;
-            font-size: 13pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            border: 2px solid #000;
-            padding: 8px 20px;
-            margin: 20px auto;
+            background: linear-gradient(to bottom, rgba(79, 70, 229, 0.2), transparent);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          }
+
+          .badge-top {
             display: inline-block;
+            padding: 8px 20px;
+            background: rgba(139, 92, 246, 0.2);
+            color: #c4b5fd;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
           }
 
-          .title-wrap {
-            text-align: center;
-            margin-bottom: 20px;
+          .doc-title { 
+            font-size: 2.2rem; 
+            font-weight: 800; 
+            line-height: 1.3; 
+            text-wrap: balance;
+            background: linear-gradient(to right, #fff, #c4b5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
           }
 
-          .info-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+          /* Action Bar */
+          .action-bar {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            padding: 1.5rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
           }
 
-          .info-table td {
-            padding: 4px 8px;
-            vertical-align: top;
-            font-size: 11pt;
+          .btn-action {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: none;
           }
 
-          .info-table .label { width: 35%; font-weight: 500; }
-          .info-table .colon { width: 3%; }
-          .info-table .value { width: 62%; }
+          .btn-copy {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+          }
+          .btn-copy:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(16, 185, 129, 0.5); }
+
+          .btn-print {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+          }
+          .btn-print:hover { background: rgba(255, 255, 255, 0.2); }
+
+          /* Content Sections */
+          .content-wrapper { padding: 2rem; }
+
+          .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 3rem;
+          }
+
+          .info-card {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 16px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+          }
+
+          .info-label { font-size: 0.8rem; color: #a78bfa; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
+          .info-value { font-size: 1.1rem; font-weight: 600; color: #fff; }
+
+          .section-block {
+            margin-bottom: 2.5rem;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 16px;
+            padding: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+          }
 
           .section-title {
-            font-size: 12pt;
-            font-weight: bold;
-            text-transform: uppercase;
-            margin: 20px 0 8px 0;
-            border-bottom: 1px solid #000;
-            padding-bottom: 4px;
+            font-size: 1.2rem;
+            color: #c4b5fd;
+            font-weight: 700;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+          }
+          
+          .section-title-icon {
+            background: rgba(139, 92, 246, 0.2);
+            padding: 6px;
+            border-radius: 8px;
+            display: flex;
           }
 
           .content-text {
-            text-align: justify;
-            font-size: 11pt;
+            font-size: 1.05rem;
             line-height: 1.8;
+            color: #e5e7eb;
             white-space: pre-line;
+            user-select: auto; /* Memastikan teks mudah di-block/copy */
           }
 
-          .peserta-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11pt;
-            margin-top: 8px;
-          }
-
-          .peserta-table th {
-            background: #f3f4f6;
-            border: 1px solid #666;
-            padding: 5px 10px;
-            font-weight: bold;
-            text-align: center;
-          }
-
-          .peserta-table td {
-            border: 1px solid #666;
-            padding: 5px 10px;
-          }
-
-          .ttd-area {
+          .peserta-list {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 40px;
-            margin-top: 40px;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 12px;
+          }
+          
+          .peserta-item {
+            background: rgba(255,255,255,0.05);
+            padding: 10px 15px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255,255,255,0.02);
           }
 
-          .ttd-box { text-align: center; }
-          .ttd-label { font-size: 11pt; margin-bottom: 60px; }
-          .ttd-name { font-size: 11pt; font-weight: bold; border-top: 1px solid #000; padding-top: 5px; display: inline-block; min-width: 160px; }
-          .ttd-nip { font-size: 10pt; margin-top: 2px; }
         `}</style>
       </Head>
 
-      {/* Config Panel - screen only */}
-      {showConfig && (
-        <div className="no-print" style={{ background: '#1e40af', padding: '16px', color: 'white' }}>
-          <div style={{ maxWidth: '21cm', margin: '0 auto', display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', marginBottom: '4px', opacity: 0.8 }}>Nama Organisasi/Pemerintah</label>
-              <input value={orgName} onChange={e => setOrgName(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '4px', border: 'none', fontSize: '13px', width: '280px' }} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '11px', marginBottom: '4px', opacity: 0.8 }}>Nama Dinas/Instansi</label>
-              <input value={deptName} onChange={e => setDeptName(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '4px', border: 'none', fontSize: '13px', width: '280px' }} />
-            </div>
-            <button onClick={handlePrint}
-              style={{ padding: '8px 20px', background: 'white', color: '#1e40af', borderRadius: '4px', border: 'none', fontWeight: '600', cursor: 'pointer', fontSize: '14px' }}>
-              🖨️ Cetak Sekarang
+      <div className="presentation-container">
+        
+        {/* Navigasi Kembali */}
+        <Link href="/">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#a78bfa', cursor: 'pointer', marginBottom: '20px', fontWeight: '600' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            Kembali ke Dashboard
+          </div>
+        </Link>
+
+        <div className="glass-panel">
+          {/* Hero Header */}
+          <div className="header-hero">
+            <div className="badge-top">Tinjauan Notulen</div>
+            <h1 className="doc-title">{data.judul}</h1>
+          </div>
+
+          {/* Action Bar (Copy & Print) */}
+          <div className="action-bar">
+            <button className="btn-action btn-copy" onClick={handleCopyText}>
+              {copied ? (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  Tersalin!
+                </>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  Salin Semua Teks
+                </>
+              )}
             </button>
+            <Link href={`/cetak/${data.id}`} target="_blank">
+              <button className="btn-action btn-print">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                Format Cetak Formal
+              </button>
+            </Link>
           </div>
-        </div>
-      )}
 
-      <div className="print-page">
-        {/* KOP SURAT */}
-        <div className="kop-surat">
-          <div className="kop-logo">🏛️</div>
-          <div className="kop-text">
-            <div className="kop-org">{orgName}</div>
-            <div className="kop-dept">{deptName}</div>
-            <div className="kop-alamat">
-              Jl. [Alamat Kantor], Telp. (0511) XXXXXXX, Fax. (0511) XXXXXXX
+          <div className="content-wrapper">
+            {/* Info Grid Laporan */}
+            <div className="info-grid">
+              <div className="info-card">
+                <div className="info-label">Tanggal Rapat</div>
+                <div className="info-value">
+                  {data.tanggal ? format(parseISO(data.tanggal), 'EEEE, dd MMMM yyyy', { locale: idLocale }) : '-'}
+                </div>
+              </div>
+              <div className="info-card">
+                <div className="info-label">Waktu Rapat</div>
+                <div className="info-value">
+                  {data.waktu_mulai || '-'} s.d. {data.waktu_selesai || '-'} WIB
+                </div>
+              </div>
+              <div className="info-card">
+                <div className="info-label">Lokasi / Tempat</div>
+                <div className="info-value">{data.tempat || '-'}</div>
+              </div>
+              <div className="info-card">
+                <div className="info-label">Pimpinan Rapat</div>
+                <div className="info-value">{data.pimpinan_rapat || '-'}</div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* JUDUL */}
-        <div className="title-wrap">
-          <div className="notulen-title">NOTULEN RAPAT</div>
-          <div style={{ fontSize: '12pt', fontWeight: 'bold', marginTop: '8px' }}>{data.judul}</div>
-        </div>
-
-        {/* INFO RAPAT */}
-        <table className="info-table">
-          <tbody>
-            <tr>
-              <td className="label">Hari, Tanggal</td>
-              <td className="colon">:</td>
-              <td className="value">
-                {data.tanggal ? format(parseISO(data.tanggal), 'EEEE', { locale: idLocale }) + ', ' + formatDate(data.tanggal) : '-'}
-              </td>
-            </tr>
-            <tr>
-              <td className="label">Waktu</td>
-              <td className="colon">:</td>
-              <td className="value">
-                {data.waktu_mulai || '-'}
-                {data.waktu_selesai ? ` s.d. ${data.waktu_selesai} WIB` : ' WIB'}
-              </td>
-            </tr>
-            <tr>
-              <td className="label">Tempat</td>
-              <td className="colon">:</td>
-              <td className="value">{data.tempat || '-'}</td>
-            </tr>
-            <tr>
-              <td className="label">Pimpinan Rapat</td>
-              <td className="colon">:</td>
-              <td className="value">{data.pimpinan_rapat || '-'}</td>
-            </tr>
-            <tr>
-              <td className="label">Notulis</td>
-              <td className="colon">:</td>
-              <td className="value">{data.notulis || '-'}</td>
-            </tr>
+            {/* Agenda */}
             {data.agenda && (
-              <tr>
-                <td className="label">Agenda</td>
-                <td className="colon">:</td>
-                <td className="value">{data.agenda}</td>
-              </tr>
+              <div className="section-block">
+                <div className="section-title">
+                  <div className="section-title-icon">🎯</div>
+                  Agenda Rapat
+                </div>
+                <div className="content-text">{data.agenda}</div>
+              </div>
             )}
-          </tbody>
-        </table>
 
-        {/* PESERTA */}
-        {pesertaList.length > 0 && (
-          <>
-            <div className="section-title">Peserta Rapat</div>
-            <table className="peserta-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '8%' }}>No.</th>
-                  <th style={{ width: '50%' }}>Nama</th>
-                  <th style={{ width: '27%' }}>Jabatan</th>
-                  <th style={{ width: '15%' }}>Tanda Tangan</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pesertaList.map((p, i) => (
-                  <tr key={i}>
-                    <td style={{ textAlign: 'center' }}>{i + 1}.</td>
-                    <td>{p}</td>
-                    <td></td>
-                    <td></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
+            {/* Pembahasan / Isi */}
+            {data.isi_notulen && (
+              <div className="section-block">
+                <div className="section-title">
+                  <div className="section-title-icon">💬</div>
+                  Jalannya Rapat / Pembahasan
+                </div>
+                <div className="content-text">{data.isi_notulen}</div>
+              </div>
+            )}
 
-        {/* ISI NOTULEN */}
-        {data.isi_notulen && (
-          <>
-            <div className="section-title">Jalannya Rapat</div>
-            <div className="content-text">{data.isi_notulen}</div>
-          </>
-        )}
+            {/* Kesimpulan */}
+            {data.kesimpulan && (
+              <div className="section-block" style={{ background: 'linear-gradient(to right, rgba(16, 185, 129, 0.1), rgba(0,0,0,0.15))', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
+                <div className="section-title" style={{ color: '#34d399' }}>
+                  <div className="section-title-icon" style={{ background: 'rgba(52, 211, 153, 0.2)' }}>✅</div>
+                  Kesimpulan
+                </div>
+                <div className="content-text">{data.kesimpulan}</div>
+              </div>
+            )}
 
-        {/* KESIMPULAN */}
-        {data.kesimpulan && (
-          <>
-            <div className="section-title">Kesimpulan</div>
-            <div className="content-text">{data.kesimpulan}</div>
-          </>
-        )}
+            {/* Tindak Lanjut */}
+            {data.tindak_lanjut && (
+              <div className="section-block" style={{ background: 'linear-gradient(to right, rgba(245, 158, 11, 0.1), rgba(0,0,0,0.15))', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                <div className="section-title" style={{ color: '#fbbf24' }}>
+                  <div className="section-title-icon" style={{ background: 'rgba(251, 191, 36, 0.2)' }}>🚀</div>
+                  Tindak Lanjut
+                </div>
+                <div className="content-text">{data.tindak_lanjut}</div>
+              </div>
+            )}
 
-        {/* TINDAK LANJUT */}
-        {data.tindak_lanjut && (
-          <>
-            <div className="section-title">Tindak Lanjut</div>
-            <div className="content-text">{data.tindak_lanjut}</div>
-          </>
-        )}
+            {/* Daftar Peserta */}
+            {pesertaList.length > 0 && (
+              <div className="section-block">
+                <div className="section-title">
+                  <div className="section-title-icon">👥</div>
+                  Daftar Hadir / Peserta
+                </div>
+                <div className="peserta-list">
+                  {pesertaList.map((p, i) => (
+                    <div key={i} className="peserta-item">
+                      <div style={{ background: 'rgba(255,255,255,0.1)', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                        {i + 1}
+                      </div>
+                      <span style={{ fontSize: '0.95rem' }}>{p}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        {/* TTD */}
-        <div className="ttd-area" style={{ marginTop: '50px' }}>
-          <div className="ttd-box">
-            <div className="ttd-label">Notulis,</div>
-            <div className="ttd-name">{data.notulis || '_______________________'}</div>
-            <div className="ttd-nip">NIP. ________________________</div>
-          </div>
-          <div className="ttd-box">
-            <div className="ttd-label">Pimpinan Rapat,</div>
-            <div className="ttd-name">{data.pimpinan_rapat || '_______________________'}</div>
-            <div className="ttd-nip">NIP. ________________________</div>
           </div>
         </div>
-
-        {/* Footer */}
-        <div style={{ marginTop: '30px', paddingTop: '10px', borderTop: '1px solid #ccc', fontSize: '9pt', color: '#666', textAlign: 'center' }}>
-          Dokumen ini digenerate oleh NotulenAI • ID: {data.id} • {data.created_at ? formatDate(data.created_at) : ''}
+        
+        <div style={{ textAlign: 'center', marginTop: '30px', color: '#64748b', fontSize: '0.85rem' }}>
+          ID Dokumen: {data.id} • Dibuat oleh Notulis: {data.notulis || '-'}
         </div>
       </div>
     </>
