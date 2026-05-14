@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const data = await getAllNotulen();
-      const sorted = data.sort((a, b) => 
+    const sorted = data.sort((a: any, b: any) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
       return res.status(200).json(sorted);
