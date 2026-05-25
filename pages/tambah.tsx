@@ -23,7 +23,10 @@ interface FormData {
 export default function TambahNotulen() {
   const router = useRouter();
   const { edit } = router.query;
-  const isEdit = !!edit;
+  
+  // PERBAIKAN 1: Pastikan edit ID selalu berupa string tunggal (mencegah error array router Next.js)
+  const editId = Array.isArray(edit) ? edit[0] : edit;
+  const isEdit = !!editId;
 
   const [form, setForm] = useState<FormData>({
     judul: '', tanggal: '', waktu_mulai: '', waktu_selesai: '',
@@ -45,19 +48,19 @@ export default function TambahNotulen() {
 
   // Load data if editing
   useEffect(() => {
-    if (edit) {
-      fetch(`/api/notulen?id=${edit}`)
+    if (editId) {
+      fetch(`/api/notulen?id=${editId}`)
         .then(r => r.json())
         .then(d => {
           if (d && d.id) setForm(d);
         })
         .catch(console.error);
     }
-  }, [edit]);
+  }, [editId]);
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 3500);
+    setTimeout(() => setToast(''), 4500); // Diperlama sedikit agar pesan error terbaca
   };
 
   const setField = (key: keyof FormData, val: string) => {
@@ -133,9 +136,6 @@ export default function TambahNotulen() {
     }
   };
 
-  // =======================================================================
-  // PERBAIKAN: FUNGSI AI GENERATOR YANG LEBIH CERDAS MENANGANI JSON MENTAH
-  // =======================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt.trim()) {
@@ -165,7 +165,6 @@ export default function TambahNotulen() {
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      // Helper untuk membersihkan string dari markdown (```json) dan mengubahnya jadi Object
       const cleanAndParse = (str: string) => {
         try {
           const cleanStr = str.replace(/```json/gi, '').replace(/```/gi, '').trim();
@@ -175,7 +174,6 @@ export default function TambahNotulen() {
         }
       };
 
-      // Kasus 1: Balasan AI sepenuhnya berupa String (yang berisi JSON)
       if (typeof rawResult === 'string') {
         const parsed = cleanAndParse(rawResult);
         if (parsed) {
@@ -184,10 +182,9 @@ export default function TambahNotulen() {
           finalKesimpulan = parsed.kesimpulan || '';
           finalTindakLanjut = parsed.tindak_lanjut || parsed.tindaklanjut || '';
         } else {
-          finalIsi = rawResult; // Fallback jika teks biasa
+          finalIsi = rawResult; 
         }
       } 
-      // Kasus 2: Balasan AI adalah Object, namun 'isi_notulen' berisi string JSON (seperti masalah sebelumnya)
       else if (rawResult && typeof rawResult.isi_notulen === 'string' && rawResult.isi_notulen.trim().startsWith('{')) {
         const parsedNested = cleanAndParse(rawResult.isi_notulen);
         if (parsedNested) {
@@ -202,7 +199,6 @@ export default function TambahNotulen() {
           finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
         }
       }
-      // Kasus 3: Normal Object (Sesuai harapan awal)
       else if (rawResult && typeof rawResult === 'object') {
         finalJudul = rawResult.judul_saran || rawResult.judul || '';
         finalIsi = rawResult.isi_notulen || rawResult.isi || '';
@@ -210,7 +206,6 @@ export default function TambahNotulen() {
         finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
       }
 
-      // Masukkan hasil yang sudah dibersihkan ke dalam state form
       setForm(prev => ({
         ...prev,
         judul: prev.judul || finalJudul || prev.judul,
@@ -227,9 +222,9 @@ export default function TambahNotulen() {
       setAiStep('');
     }
   };
-  // =======================================================================
 
-  const handleSave = async (status?: string) => {
+  // PERBAIKAN 2: FUNGSI SIMPAN YANG JAUH LEBIH KUAT DAN INFORMATIF
+  const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan tanggal wajib diisi');
       return;
@@ -237,23 +232,52 @@ export default function TambahNotulen() {
 
     setSaving(true);
     try {
-      const payload = { ...form, status: status || form.status };
+      // Memastikan tidak ada field "undefined" yang bisa menyebabkan API Spreadsheet crash
+      const payload = {
+        judul: form.judul || '',
+        tanggal: form.tanggal || '',
+        waktu_mulai: form.waktu_mulai || '',
+        waktu_selesai: form.waktu_selesai || '',
+        tempat: form.tempat || '',
+        pimpinan_rapat: form.pimpinan_rapat || '',
+        notulis: form.notulis || '',
+        peserta: form.peserta || '',
+        agenda: form.agenda || '',
+        isi_notulen: form.isi_notulen || '',
+        kesimpulan: form.kesimpulan || '',
+        tindak_lanjut: form.tindak_lanjut || '',
+        status: statusOverride || form.status || 'draft',
+        raw_transcript: form.raw_transcript || ''
+      };
+
       const method = isEdit ? 'PUT' : 'POST';
-      const body = isEdit ? { ...payload, id: edit } : payload;
+      const body = isEdit ? { ...payload, id: editId } : payload;
 
       const res = await fetch('/api/notulen', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json' 
+        },
         body: JSON.stringify(body)
       });
 
-      if (!res.ok) throw new Error('Gagal menyimpan');
+      // Menangkap pesan error ASLI dari backend/Sheets jika gagal
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.details || errData.error || `HTTP Error ${res.status}`);
+      }
+
       const saved = await res.json();
 
       showToast('✅ Notulen berhasil disimpan!');
-      setTimeout(() => router.push(`/notulen/${saved.id}`), 1200);
+      // Gunakan saved.id jika baru buat, atau editId jika mode edit
+      setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1200);
+      
     } catch (err: any) {
-      showToast(`❌ ${err.message}`);
+      console.error("DEBUG SIMPAN:", err);
+      // Menampilkan alasan gagal yang sebenarnya ke layar
+      showToast(`❌ Gagal: ${err.message}`);
     } finally {
       setSaving(false);
     }
