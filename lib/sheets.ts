@@ -31,7 +31,6 @@ export async function getAllNotulen() {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   const rows = await sheet.getRows();
-  // Ambil objek mentah dengan aman
   return rows.map((row: any) => row.toObject());
 }
 
@@ -39,11 +38,11 @@ export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   
-  // SISTEM SAPU BERSIH DINAMIS: Apapun data yang masuk, bersihkan bintangnya tanpa merusak struktur
+  // SISTEM PEMBERSIHAN DINAMIS
   const cleanData: any = { ...data };
   for (const key in cleanData) {
     if (typeof cleanData[key] === 'string') {
-      // Hapus Bintang Markdown (**) maupun (*)
+      // Hanya menghapus bintang markdown (*), spasi & enter (\n) tetap aman
       cleanData[key] = cleanData[key].replace(/\*/g, '').trim();
     }
   }
@@ -51,18 +50,28 @@ export async function saveNotulen(data: any) {
   cleanData.status = cleanData.status || 'draft';
   cleanData.updated_at = new Date().toISOString();
 
-  // Mode UPDATE jika ID sudah ada
+  // MODE UPDATE: JIKA ID SUDAH ADA (Misal AI dipanggil setelah data di-draft)
   if (cleanData.id) {
     const rows = await sheet.getRows();
     const row = rows.find((r: any) => r.get('id') === cleanData.id);
     if (row) {
-      Object.assign(row, cleanData);
+      // FIX MUTLAK: Memaksa update sel satu per satu secara langsung (Support semua versi library)
+      SHEET_HEADERS.forEach(header => {
+        if (cleanData[header] !== undefined) {
+          if (typeof row.set === 'function') {
+            row.set(header, cleanData[header]); // Library v4
+          } else {
+            row[header] = cleanData[header]; // Library v3
+          }
+        }
+      });
+      
       await row.save();
       return cleanData;
     }
   }
   
-  // Mode CREATE (Data Baru)
+  // MODE CREATE: JIKA DATA BARU
   cleanData.id = cleanData.id || `NTL-${Date.now()}`;
   cleanData.created_at = cleanData.created_at || new Date().toISOString();
   
