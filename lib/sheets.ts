@@ -12,11 +12,21 @@ let docCache: any = null;
 
 async function getDoc() {
   if (docCache) return docCache;
+  
+  // PERBAIKAN KRUSIAL UNTUK VERCEL: 
+  // 1. Mengubah literal \n menjadi newline asli
+  // 2. Menghapus tanda kutip ganda (") di awal dan akhir yang sering merusak key di Vercel
+  // 3. Menghapus spasi kosong dengan trim()
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY
+    ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim()
+    : '';
+
   const auth = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    key: privateKey,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
+  
   const doc = new GoogleSpreadsheet(process.env.GOOGLE_SPREADSHEET_ID!, auth);
   await doc.loadInfo();
   docCache = doc;
@@ -27,12 +37,13 @@ export async function getAllNotulen() {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   const rows = await sheet.getRows();
- return rows.map((row: any) => row.toObject());
+  return rows.map((row: any) => row.toObject());
 }
 
 export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
+  
   if (data.id) {
     const rows = await sheet.getRows();
     const row = rows.find((r: any) => r.get('id') === data.id);
@@ -42,11 +53,13 @@ export async function saveNotulen(data: any) {
       return data;
     }
   }
+  
   const newId = `NTL-${Date.now()}`;
   const record = { ...data, id: newId, created_at: new Date().toISOString(), status: data.status || 'draft' };
   await sheet.addRow(record);
   return record;
 }
+
 export async function getNotulenByDate(date: string) {
   const doc = await getDoc();
   // Gunakan fallback addSheet agar tidak error jika sheet belum ada
