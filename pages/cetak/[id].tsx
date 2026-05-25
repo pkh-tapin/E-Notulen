@@ -45,6 +45,12 @@ export default function CetakNotulen() {
     window.print();
   };
 
+  // FUNGSI CANGGIH: Membersihkan karakter bintang (*) bawaan AI agar layar & cetakan 100% bersih
+  const cleanAiText = (str?: string) => {
+    if (!str) return '';
+    return str.replace(/\*/g, '').trim();
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#1e1b4b' }}>
@@ -61,18 +67,19 @@ export default function CetakNotulen() {
     );
   }
 
-  const pesertaList = data.peserta ? data.peserta.split(/[\n,]+/).map(p => p.trim()).filter(Boolean) : [];
+  const pesertaList = data.peserta ? cleanAiText(data.peserta).split(/[\n,]+/).map(p => p.trim()).filter(Boolean) : [];
 
   return (
     <>
       <Head>
-        <title>Notulen — {data.judul}</title>
+        <title>Notulen — {cleanAiText(data.judul)}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Times+New+Roman&display=swap');
 
           /* ==============================================================
              MODE LAYAR (SCREEN) : Glassmorphism Soft Purple & Presentation
+             (TIDAK DIUBAH SAMA SEKALI - TETAP PERFECT SEPERTI ASLINYA)
              ============================================================== */
           @media screen {
             body { 
@@ -160,10 +167,8 @@ export default function CetakNotulen() {
               white-space: pre-line;
             }
 
-            /* Hiding formal print elements */
             .print-only, .ttd-area { display: none !important; }
 
-            /* Floating Print Button */
             .fab-print {
               position: fixed;
               bottom: 30px;
@@ -185,76 +190,89 @@ export default function CetakNotulen() {
             }
             .fab-print:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 15px 35px rgba(126, 34, 206, 0.6); }
             
-            /* Responsive Peserta Table for Screen */
             .peserta-table { width: 100%; border-collapse: collapse; }
             .peserta-table th { text-align: left; padding: 10px; color: #a78bfa; border-bottom: 1px solid rgba(255,255,255,0.1); }
             .peserta-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
           }
 
           /* ==============================================================
-             MODE CETAK (PRINT) : Formal Office Laporan Standar
+             MODE CETAK (PRINT) : UPGRADE! LAPORAN RESMI KELAS DINAS/KANTOR
              ============================================================== */
           @media print {
-            @page { margin: 2cm; size: A4 portrait; }
+            @page { margin: 2.5cm; size: A4 portrait; }
             
             body { 
-              background: white; 
-              color: black; 
-              font-family: 'Times New Roman', Times, serif; 
-              font-size: 12pt;
+              background: white !important; 
+              color: black !important; 
+              font-family: 'Times New Roman', Times, serif !important; 
+              font-size: 12pt !important;
             }
 
             .screen-only, .fab-print { display: none !important; }
             
             .document-container {
-              max-width: 100%;
-              margin: 0;
-              padding: 0;
-              background: transparent;
-              border: none;
-              box-shadow: none;
-              backdrop-filter: none;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: transparent !important;
+              border: none !important;
+              box-shadow: none !important;
+              backdrop-filter: none !important;
             }
 
             .main-title-wrap {
               text-align: center;
-              margin-bottom: 30px;
+              margin-bottom: 25px;
+              border-bottom: 3px double #000;
+              padding-bottom: 15px;
             }
 
             .print-title {
-              font-size: 14pt;
-              font-weight: bold;
-              text-decoration: underline;
-              text-transform: uppercase;
-              letter-spacing: 1px;
+              font-size: 16pt !important;
+              font-weight: bold !important;
+              text-transform: uppercase !important;
+              letter-spacing: 1px !important;
+              color: #000 !important;
             }
-            .print-subtitle { font-size: 12pt; font-weight: bold; margin-top: 5px; }
+            .print-subtitle { 
+              font-size: 13pt !important; 
+              font-weight: bold !important; 
+              margin-top: 8px !important;
+              color: #000 !important;
+              text-transform: uppercase !important;
+            }
 
-            .section-card { margin-bottom: 15px; padding: 0; background: transparent; border: none; }
+            .section-card { margin-bottom: 20px; padding: 0; background: transparent !important; border: none !important; }
 
             /* Formal Info Table Layout */
             .info-table-print {
               width: 100%;
               border-collapse: collapse;
-              margin-bottom: 20px;
+              margin-bottom: 25px;
               line-height: 1.5;
             }
-            .info-table-print td { vertical-align: top; padding: 4px 0; }
-            .it-label { width: 25%; font-weight: normal; }
+            .info-table-print td { vertical-align: top; padding: 4px 0; color: #000 !important; font-size: 12pt !important; }
+            .it-label { width: 25%; font-weight: bold !important; }
             .it-colon { width: 3%; text-align: center; }
             .it-value { width: 72%; }
 
             .section-header {
-              font-size: 12pt;
-              font-weight: bold;
-              margin: 20px 0 10px 0;
-              text-transform: uppercase;
+              font-size: 12pt !important;
+              font-weight: bold !important;
+              margin: 25px 0 10px 0 !important;
+              text-transform: uppercase !important;
+              color: #000 !important;
+              border-bottom: 1px solid #000;
+              padding-bottom: 5px;
             }
 
+            /* UPGRADE: Teks Justify dan Spasi Elegan untuk Hasil AI */
             .content-text {
-              text-align: justify;
-              line-height: 1.5;
-              white-space: pre-line;
+              text-align: justify !important;
+              line-height: 1.6 !important;
+              white-space: pre-wrap !important;
+              color: #000 !important;
+              font-size: 12pt !important;
             }
 
             /* Formal Peserta Table */
@@ -265,31 +283,33 @@ export default function CetakNotulen() {
               page-break-inside: avoid;
             }
             .peserta-table th, .peserta-table td {
-              border: 1px solid black;
-              padding: 6px 10px;
-              font-size: 11pt;
+              border: 1px solid black !important;
+              padding: 8px 10px;
+              font-size: 11pt !important;
+              color: #000 !important;
             }
-            .peserta-table th { background: transparent; font-weight: bold; text-align: center; }
+            .peserta-table th { background: transparent !important; font-weight: bold !important; text-align: center !important; }
 
-            /* TTD Area */
+            /* TTD Area yang Sempurna */
             .ttd-area {
-              display: flex;
-              justify-content: space-between;
-              margin-top: 60px;
-              page-break-inside: avoid;
+              display: flex !important;
+              justify-content: space-between !important;
+              margin-top: 70px !important;
+              page-break-inside: avoid !important;
             }
-            .ttd-box { width: 45%; text-align: center; }
-            .ttd-label { font-size: 12pt; margin-bottom: 80px; }
-            .ttd-name { font-size: 12pt; font-weight: bold; text-decoration: underline; }
-            .ttd-nip { font-size: 11pt; margin-top: 3px; }
+            .ttd-box { width: 45%; text-align: center !important; color: #000 !important; }
+            .ttd-label { font-size: 12pt !important; margin-bottom: 90px !important; }
+            .ttd-name { font-size: 12pt !important; font-weight: bold !important; text-decoration: underline !important; }
+            .ttd-nip { font-size: 11pt !important; margin-top: 3px !important; }
 
             .print-footer {
-              margin-top: 40px;
+              margin-top: 50px;
               padding-top: 10px;
               border-top: 1px solid #000;
-              font-size: 9pt;
+              font-size: 10pt !important;
               text-align: center;
               font-style: italic;
+              color: #000 !important;
             }
           }
         `}</style>
@@ -297,7 +317,7 @@ export default function CetakNotulen() {
 
       <button className="fab-print" onClick={handlePrint}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-        Cetak Laporan
+        Cetak Laporan Resmi
       </button>
 
       <div className="document-container">
@@ -305,11 +325,11 @@ export default function CetakNotulen() {
         <div className="main-title-wrap">
           {/* Screen Only Badge */}
           <div className="screen-only badge-top">Notulen Rapat</div>
-          <div className="screen-only doc-title">{data.judul}</div>
+          <div className="screen-only doc-title">{cleanAiText(data.judul)}</div>
 
           {/* Print Only Title */}
           <div className="print-only print-title">NOTULEN RAPAT</div>
-          <div className="print-only print-subtitle">{data.judul}</div>
+          <div className="print-only print-subtitle">{cleanAiText(data.judul)}</div>
         </div>
 
         {/* ================= INFORMASI RAPAT ================= */}
@@ -327,20 +347,20 @@ export default function CetakNotulen() {
             <div className="info-item">
               <span className="info-label">Waktu</span>
               <span className="info-value">
-                {data.waktu_mulai || '-'} {data.waktu_selesai ? ` - ${data.waktu_selesai} WIB` : ' WIB'}
+                {data.waktu_mulai || '-'} {data.waktu_selesai ? ` - ${data.waktu_selesai} WITA` : ' WITA'}
               </span>
             </div>
             <div className="info-item">
               <span className="info-label">Tempat</span>
-              <span className="info-value">{data.tempat || '-'}</span>
+              <span className="info-value">{cleanAiText(data.tempat) || '-'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Pimpinan Rapat</span>
-              <span className="info-value">{data.pimpinan_rapat || '-'}</span>
+              <span className="info-value">{cleanAiText(data.pimpinan_rapat) || '-'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Notulis</span>
-              <span className="info-value">{data.notulis || '-'}</span>
+              <span className="info-value">{cleanAiText(data.notulis) || '-'}</span>
             </div>
           </div>
 
@@ -355,28 +375,28 @@ export default function CetakNotulen() {
               <tr>
                 <td className="it-label">Waktu</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{data.waktu_mulai || '-'} {data.waktu_selesai ? ` s.d. ${data.waktu_selesai} WIB` : ' WIB'}</td>
+                <td className="it-value">{data.waktu_mulai || '-'} {data.waktu_selesai ? ` s.d. ${data.waktu_selesai} WITA` : ' WITA'}</td>
               </tr>
               <tr>
                 <td className="it-label">Tempat</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{data.tempat || '-'}</td>
+                <td className="it-value">{cleanAiText(data.tempat) || '-'}</td>
               </tr>
               <tr>
                 <td className="it-label">Pimpinan Rapat</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{data.pimpinan_rapat || '-'}</td>
+                <td className="it-value">{cleanAiText(data.pimpinan_rapat) || '-'}</td>
               </tr>
               <tr>
                 <td className="it-label">Notulis</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{data.notulis || '-'}</td>
+                <td className="it-value">{cleanAiText(data.notulis) || '-'}</td>
               </tr>
               {data.agenda && (
                 <tr>
                   <td className="it-label">Agenda</td>
                   <td className="it-colon">:</td>
-                  <td className="it-value">{data.agenda}</td>
+                  <td className="it-value">{cleanAiText(data.agenda)}</td>
                 </tr>
               )}
             </tbody>
@@ -387,7 +407,7 @@ export default function CetakNotulen() {
         {data.agenda && (
           <div className="screen-only section-card">
             <div className="section-header">🎯 Agenda</div>
-            <div className="content-text">{data.agenda}</div>
+            <div className="content-text">{cleanAiText(data.agenda)}</div>
           </div>
         )}
 
@@ -422,7 +442,7 @@ export default function CetakNotulen() {
         {data.isi_notulen && (
           <div className="section-card">
             <div className="section-header">📝 Pembahasan / Jalannya Rapat</div>
-            <div className="content-text">{data.isi_notulen}</div>
+            <div className="content-text">{cleanAiText(data.isi_notulen)}</div>
           </div>
         )}
 
@@ -430,7 +450,7 @@ export default function CetakNotulen() {
         {data.kesimpulan && (
           <div className="section-card">
             <div className="section-header">✅ Kesimpulan</div>
-            <div className="content-text">{data.kesimpulan}</div>
+            <div className="content-text">{cleanAiText(data.kesimpulan)}</div>
           </div>
         )}
 
@@ -438,7 +458,7 @@ export default function CetakNotulen() {
         {data.tindak_lanjut && (
           <div className="section-card">
             <div className="section-header">🚀 Tindak Lanjut</div>
-            <div className="content-text">{data.tindak_lanjut}</div>
+            <div className="content-text">{cleanAiText(data.tindak_lanjut)}</div>
           </div>
         )}
 
@@ -446,12 +466,12 @@ export default function CetakNotulen() {
         <div className="print-only ttd-area">
           <div className="ttd-box">
             <div className="ttd-label">Notulis,</div>
-            <div className="ttd-name">{data.notulis || '_______________________'}</div>
+            <div className="ttd-name">{cleanAiText(data.notulis) || '_______________________'}</div>
             {data.notulis && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
           <div className="ttd-box">
             <div className="ttd-label">Pimpinan Rapat,</div>
-            <div className="ttd-name">{data.pimpinan_rapat || '_______________________'}</div>
+            <div className="ttd-name">{cleanAiText(data.pimpinan_rapat) || '_______________________'}</div>
             {data.pimpinan_rapat && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
         </div>
