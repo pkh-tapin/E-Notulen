@@ -12,27 +12,21 @@ let docCache: any = null;
 
 async function getDoc() {
   if (docCache) return docCache;
-  
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY
-    ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim()
-    : '';
-
   const auth = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: privateKey,
+    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
-  
   const doc = new GoogleSpreadsheet(process.env.GOOGLE_SPREADSHEET_ID!, auth);
   await doc.loadInfo();
   docCache = doc;
   return doc;
 }
 
-// Fungsi bantu untuk membersihkan teks hasil AI dari karakter bintang (*)
-function cleanAiText(text: any) {
-  if (typeof text !== 'string') return text;
-  return text.replace(/\*/g, '');
+// Fungsi tingkat tinggi untuk membersihkan teks AI dari simbol markdown asterisks (**)
+function sanitizeAiData(val: any): string {
+  if (typeof val !== 'string') return val || '';
+  return val.replace(/\*\*/g, '').trim();
 }
 
 export async function getAllNotulen() {
@@ -46,28 +40,49 @@ export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   
-  // Wajib Bersihkan bidang yang berpotensi dihasilkan oleh AI dari simbol markdown bintang
-  const sanitizedData = {
-    ...data,
-    isi_notulen: cleanAiText(data.isi_notulen),
-    kesimpulan: cleanAiText(data.kesimpulan),
-    tindak_lanjut: cleanAiText(data.tindak_lanjut),
-    judul: cleanAiText(data.judul),
-    agenda: cleanAiText(data.agenda)
+  // Membersihkan seluruh field teks utama dari karakter bintang bawaan format AI
+  const cleanData: Record<string, any> = {
+    judul: sanitizeAiData(data.judul),
+    tanggal: data.tanggal || '',
+    waktu_mulai: data.waktu_mulai || '',
+    waktu_selesai: data.waktu_selesai || '',
+    tempat: sanitizeAiData(data.tempat),
+    pimpinan_rapat: sanitizeAiData(data.pimpinan_rapat),
+    notulis: sanitizeAiData(data.notulis),
+    peserta: sanitizeAiData(data.peserta),
+    agenda: sanitizeAiData(data.agenda),
+    isi_notulen: sanitizeAiData(data.isi_notulen),
+    kesimpulan: sanitizeAiData(data.kesimpulan),
+    tindak_lanjut: sanitizeAiData(data.tindak_lanjut),
+    raw_transcript: data.raw_transcript || '',
+    status: data.status || 'draft' // Menjaga akurasi penentuan tombol Draft / Final dari client
   };
 
-  if (sanitizedData.id) {
+  if (data.id) {
     const rows = await sheet.getRows();
-    const row = rows.find((r: any) => r.get('id') === sanitizedData.id);
+    const row = rows.find((r: any) => r.get('id') === data.id);
     if (row) {
-      Object.assign(row, { ...sanitizedData, updated_at: new Date().toISOString() });
+      // Perbarukan baris data lama dengan data baru yang sudah bersih
+      Object.assign(row, { 
+        ...cleanData, 
+        id: data.id, 
+        created_at: data.created_at || row.get('created_at'),
+        updated_at: new Date().toISOString() 
+      });
       await row.save();
-      return sanitizedData;
+      return { ...cleanData, id: data.id };
     }
   }
   
+  // Jika data baru, buat ID unik baru
   const newId = `NTL-${Date.now()}`;
-  const record = { ...sanitizedData, id: newId, created_at: new Date().toISOString(), status: sanitizedData.status || 'draft' };
+  const record = { 
+    ...cleanData, 
+    id: newId, 
+    created_at: new Date().toISOString(), 
+    updated_at: new Date().toISOString() 
+  };
+  
   await sheet.addRow(record);
   return record;
 }
