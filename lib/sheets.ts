@@ -12,9 +12,13 @@ let docCache: any = null;
 
 async function getDoc() {
   if (docCache) return docCache;
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY
+    ? process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim()
+    : '';
+
   const auth = new JWT({
     email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    key: privateKey,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   const doc = new GoogleSpreadsheet(process.env.GOOGLE_SPREADSHEET_ID!, auth);
@@ -23,16 +27,11 @@ async function getDoc() {
   return doc;
 }
 
-// Fungsi tingkat tinggi untuk membersihkan teks AI dari simbol markdown asterisks (**)
-function sanitizeAiData(val: any): string {
-  if (typeof val !== 'string') return val || '';
-  return val.replace(/\*\*/g, '').trim();
-}
-
 export async function getAllNotulen() {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   const rows = await sheet.getRows();
+  // Ambil objek mentah dengan aman
   return rows.map((row: any) => row.toObject());
 }
 
@@ -40,51 +39,35 @@ export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   
-  // Membersihkan seluruh field teks utama dari karakter bintang bawaan format AI
-  const cleanData: Record<string, any> = {
-    judul: sanitizeAiData(data.judul),
-    tanggal: data.tanggal || '',
-    waktu_mulai: data.waktu_mulai || '',
-    waktu_selesai: data.waktu_selesai || '',
-    tempat: sanitizeAiData(data.tempat),
-    pimpinan_rapat: sanitizeAiData(data.pimpinan_rapat),
-    notulis: sanitizeAiData(data.notulis),
-    peserta: sanitizeAiData(data.peserta),
-    agenda: sanitizeAiData(data.agenda),
-    isi_notulen: sanitizeAiData(data.isi_notulen),
-    kesimpulan: sanitizeAiData(data.kesimpulan),
-    tindak_lanjut: sanitizeAiData(data.tindak_lanjut),
-    raw_transcript: data.raw_transcript || '',
-    status: data.status || 'draft' // Menjaga akurasi penentuan tombol Draft / Final dari client
-  };
-
-  if (data.id) {
-    const rows = await sheet.getRows();
-    const row = rows.find((r: any) => r.get('id') === data.id);
-    if (row) {
-      // Perbarukan baris data lama dengan data baru yang sudah bersih
-      Object.assign(row, { 
-        ...cleanData, 
-        id: data.id, 
-        created_at: data.created_at || row.get('created_at'),
-        updated_at: new Date().toISOString() 
-      });
-      await row.save();
-      return { ...cleanData, id: data.id };
+  // SISTEM SAPU BERSIH DINAMIS: Apapun data yang masuk, bersihkan bintangnya tanpa merusak struktur
+  const cleanData: any = { ...data };
+  for (const key in cleanData) {
+    if (typeof cleanData[key] === 'string') {
+      // Hapus Bintang Markdown (**) maupun (*)
+      cleanData[key] = cleanData[key].replace(/\*/g, '').trim();
     }
   }
   
-  // Jika data baru, buat ID unik baru
-  const newId = `NTL-${Date.now()}`;
-  const record = { 
-    ...cleanData, 
-    id: newId, 
-    created_at: new Date().toISOString(), 
-    updated_at: new Date().toISOString() 
-  };
+  cleanData.status = cleanData.status || 'draft';
+  cleanData.updated_at = new Date().toISOString();
+
+  // Mode UPDATE jika ID sudah ada
+  if (cleanData.id) {
+    const rows = await sheet.getRows();
+    const row = rows.find((r: any) => r.get('id') === cleanData.id);
+    if (row) {
+      Object.assign(row, cleanData);
+      await row.save();
+      return cleanData;
+    }
+  }
   
-  await sheet.addRow(record);
-  return record;
+  // Mode CREATE (Data Baru)
+  cleanData.id = cleanData.id || `NTL-${Date.now()}`;
+  cleanData.created_at = cleanData.created_at || new Date().toISOString();
+  
+  await sheet.addRow(cleanData);
+  return cleanData;
 }
 
 export async function getNotulenByDate(date: string) {
