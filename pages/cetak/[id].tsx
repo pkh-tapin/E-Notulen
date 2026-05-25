@@ -60,7 +60,10 @@ export default function CetakNotulen() {
       // Ubah *teks* menjadi format miring (Italic) jika AI menggunakannya
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       // Rapikan strip awalan (-) menjadi bullet point yang lebih bersih
-      .replace(/^- /gm, '• ');
+      .replace(/^- /gm, '• ')
+      // FIX MUTLAK UNTUK PDF: Ubah Enter bawaan AI (\n) menjadi Baris Baru HTML (<br />)
+      // Ini menjamin paragraf TIDAK AKAN PERNAH menumpuk saat di-print/save ke PDF!
+      .replace(/\n/g, '<br />');
     
     return { __html: htmlText };
   };
@@ -178,7 +181,7 @@ export default function CetakNotulen() {
               font-size: 1rem;
               line-height: 1.7;
               color: #e5e7eb;
-              white-space: pre-wrap; /* Wajib ada untuk menjaga Enter/Baris Baru AI */
+              white-space: pre-wrap; 
               word-wrap: break-word;
             }
             .content-text strong {
@@ -291,12 +294,13 @@ export default function CetakNotulen() {
             .content-text {
               text-align: justify !important;
               line-height: 1.6 !important;
-              white-space: pre-wrap !important; /* Wajib agar enter terdeteksi saat di-print */
+              white-space: pre-wrap !important;
               color: #000 !important;
               font-size: 12pt !important;
             }
             .content-text strong {
               font-weight: bold !important;
+              color: #000 !important;
             }
 
             .peserta-table {
