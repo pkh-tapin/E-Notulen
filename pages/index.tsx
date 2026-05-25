@@ -25,6 +25,40 @@ export default function Dashboard() {
   const [filterStatus, setFilterStatus] = useState('');
   const [stats, setStats] = useState({ total: 0, final: 0, draft: 0, thisMonth: 0 });
 
+  // ================= STATE KEAMANAN ADMIN =================
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Cek sesi login admin saat pertama kali web dibuka
+  useEffect(() => {
+    const adminSession = localStorage.getItem('notulen_admin_logged');
+    if (adminSession === 'true') {
+      setIsAdmin(true);
+    }
+  }, []);
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    // ⚠️ GANTI 'admin123' DENGAN PASSWORD RAHASIA YANG KAMU INGINKAN
+    if (password === 'admin123') {
+      setIsAdmin(true);
+      localStorage.setItem('notulen_admin_logged', 'true');
+      setShowLogin(false);
+      setPassword('');
+      setLoginError('');
+    } else {
+      setLoginError('Akses Ditolak! Kata sandi salah.');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAdmin(false);
+    localStorage.removeItem('notulen_admin_logged');
+  };
+  // ========================================================
+
   const fetchData = useCallback(async () => {
     try {
       const url = filterDate ? `/api/notulen?tanggal=${filterDate}` : '/api/notulen';
@@ -139,7 +173,14 @@ export default function Dashboard() {
           .badge-review { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
           .badge-final { background: rgba(52, 211, 153, 0.2); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
 
-          /* Custom Scrollbar for Table */
+          /* Style Modal Login */
+          .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px);
+            z-index: 100; display: flex; align-items: center; justify-content: center;
+          }
+
+          /* Custom Scrollbar */
           ::-webkit-scrollbar { height: 8px; width: 8px; }
           ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.1); }
           ::-webkit-scrollbar-thumb { background: rgba(139, 92, 246, 0.5); border-radius: 4px; }
@@ -157,8 +198,13 @@ export default function Dashboard() {
                   <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-              <span className="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-fuchsia-300">
+              <span className="text-xl font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-fuchsia-300 hidden sm:block">
                 NOTULEN<span className="text-white">AI</span>
+              </span>
+              
+              {/* LENCANA MODE (PUBLIC / ADMIN) */}
+              <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${isAdmin ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'}`}>
+                {isAdmin ? '🛡️ Admin Mode' : '👁️ Public View'}
               </span>
             </div>
 
@@ -166,14 +212,41 @@ export default function Dashboard() {
               <span className="text-purple-300 text-sm font-medium hidden md:block">
                 {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
               </span>
-              <Link href="/tambah">
-                <button className="btn-glossy flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                  </svg>
-                  Tambah Notulen
-                </button>
-              </Link>
+
+              {/* TOMBOL LOGIN / LOGOUT ADMIN */}
+              <button
+                onClick={isAdmin ? handleLogout : () => setShowLogin(true)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition duration-300 ${
+                  isAdmin 
+                    ? 'bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.2)]' 
+                    : 'bg-white/5 text-purple-300 border-white/10 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {isAdmin ? (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                    Logout
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    Admin
+                  </>
+                )}
+              </button>
+
+              {/* TOMBOL TAMBAH NOTULEN (HANYA MUNCUL BILA ADMIN LOGIN) */}
+              {isAdmin && (
+                <Link href="/tambah">
+                  <button className="btn-glossy flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-semibold">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    <span className="hidden sm:block">Tambah Notulen</span>
+                    <span className="sm:hidden">Tambah</span>
+                  </button>
+                </Link>
+              )}
             </div>
           </div>
         </nav>
@@ -195,7 +268,7 @@ export default function Dashboard() {
               { label: 'Masih Draft', value: stats.draft, icon: '📝', color: '#fbbf24' },
               { label: 'Bulan Ini', value: stats.thisMonth, icon: '📅', color: '#38bdf8' },
             ].map((s, i) => (
-              <div key={i} className="glass-card rounded-2xl p-5">
+              <div key={i} className="glass-card rounded-2xl p-5 hover:scale-[1.02] transition-transform duration-300">
                 <div className="flex items-start justify-between mb-3">
                   <div className="text-2xl bg-white/10 w-10 h-10 flex items-center justify-center rounded-xl border border-white/5 shadow-inner">{s.icon}</div>
                   <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: s.color, boxShadow: `0 0 10px ${s.color}` }} />
@@ -219,8 +292,8 @@ export default function Dashboard() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                <div className="relative w-full sm:w-64">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400">
+                <div className="relative w-full sm:w-64 group">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 group-focus-within:text-purple-300 transition-colors">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                   </svg>
                   <input
@@ -235,12 +308,12 @@ export default function Dashboard() {
                   type="date"
                   value={filterDate}
                   onChange={e => setFilterDate(e.target.value)}
-                  className="glass-input px-3 py-2 rounded-xl text-sm"
+                  className="glass-input px-3 py-2 rounded-xl text-sm [color-scheme:dark]"
                 />
                 <select
                   value={filterStatus}
                   onChange={e => setFilterStatus(e.target.value)}
-                  className="glass-input px-3 py-2 rounded-xl text-sm"
+                  className="glass-input px-3 py-2 rounded-xl text-sm cursor-pointer"
                 >
                   <option value="" style={{ color: 'black' }}>Semua Status</option>
                   <option value="draft" style={{ color: 'black' }}>Draft</option>
@@ -268,9 +341,11 @@ export default function Dashboard() {
                 <div className="text-center">
                   <div className="text-5xl mb-4 opacity-50">📭</div>
                   <p className="text-purple-300 text-lg mb-2">Belum ada notulen yang ditemukan</p>
-                  <Link href="/tambah">
-                    <span className="text-fuchsia-400 text-sm font-semibold cursor-pointer hover:text-fuchsia-300 hover:underline">Tambah notulen baru sekarang →</span>
-                  </Link>
+                  {isAdmin && (
+                    <Link href="/tambah">
+                      <span className="text-fuchsia-400 text-sm font-semibold cursor-pointer hover:text-fuchsia-300 hover:underline">Tambah notulen baru sekarang →</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             ) : (
@@ -307,6 +382,7 @@ export default function Dashboard() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
+                            {/* TOMBOL LIHAT (SELALU MUNCUL UNTUK PUBLIK & ADMIN) */}
                             <Link href={`/notulen/${n.id}`}>
                               <button className="p-2 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 hover:text-blue-300 border border-blue-500/20 transition" title="Lihat">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -315,13 +391,19 @@ export default function Dashboard() {
                                 </svg>
                               </button>
                             </Link>
-                            <Link href={`/tambah?edit=${n.id}`}>
-                              <button className="p-2 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 hover:text-yellow-300 border border-yellow-500/20 transition" title="Edit">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                            </Link>
+
+                            {/* TOMBOL EDIT (HANYA MUNCUL JIKA ADMIN LOGIN) */}
+                            {isAdmin && (
+                              <Link href={`/tambah?edit=${n.id}`}>
+                                <button className="p-2 rounded-lg bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 hover:text-yellow-300 border border-yellow-500/20 transition" title="Edit">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                              </Link>
+                            )}
+
+                            {/* TOMBOL CETAK (SELALU MUNCUL UNTUK PUBLIK & ADMIN) */}
                             <Link href={`/cetak/${n.id}`} target="_blank">
                               <button className="p-2 rounded-lg bg-fuchsia-500/10 text-fuchsia-400 hover:bg-fuchsia-500/20 hover:text-fuchsia-300 border border-fuchsia-500/20 transition" title="Cetak">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -340,6 +422,61 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* POPUP MODAL LOGIN ADMIN GLASSMORPHISM (MUNCUL BILA KLIK LOGIN) */}
+      {showLogin && (
+        <div className="modal-overlay" onClick={() => setShowLogin(false)}>
+          <div 
+            className="glass-panel p-8 rounded-2xl w-full max-w-sm mx-4 transform transition-all duration-300 scale-100 opacity-100 shadow-[0_0_50px_rgba(139,92,246,0.3)] border-t border-l border-white/20" 
+            onClick={(e) => e.stopPropagation()} // Mencegah klik di dalam modal menutup modal
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-gradient-to-tr from-purple-600 to-fuchsia-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg rotate-3 hover:rotate-0 transition-transform">
+                <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-8 h-8"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              </div>
+              <h3 className="text-xl font-bold text-white tracking-wide">Otorisasi Admin</h3>
+              <p className="text-xs text-purple-200/60 mt-1 font-medium">Buka kunci fitur tambah & edit data</p>
+            </div>
+
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div className="relative group">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400 group-focus-within:text-purple-300"><path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" /></svg>
+                <input
+                  type="password"
+                  placeholder="Ketik kata sandi..."
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="glass-input w-full pl-11 pr-4 py-3 rounded-xl text-sm tracking-widest focus:ring-2 focus:ring-purple-500/50"
+                  autoFocus
+                />
+              </div>
+
+              {loginError && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-semibold p-2.5 rounded-lg text-center animate-pulse">
+                  {loginError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowLogin(false); setLoginError(''); setPassword(''); }}
+                  className="w-1/2 py-2.5 rounded-xl text-sm font-semibold bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 hover:text-white transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 py-2.5 rounded-xl text-sm font-bold btn-glossy transition flex items-center justify-center gap-2"
+                >
+                  Masuk
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }
