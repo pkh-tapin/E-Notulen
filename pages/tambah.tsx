@@ -133,6 +133,9 @@ export default function TambahNotulen() {
     }
   };
 
+  // =======================================================================
+  // PERBAIKAN: FUNGSI AI GENERATOR YANG LEBIH CERDAS MENANGANI JSON MENTAH
+  // =======================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt.trim()) {
@@ -155,15 +158,14 @@ export default function TambahNotulen() {
           pimpinan: form.pimpinan_rapat
         })
       });
-      
-      let result = await res.json();
-      
+      const rawResult = await res.json();
+
       let finalJudul = '';
       let finalIsi = '';
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      // Fungsi internal pembersih markdown JSON cerdas
+      // Helper untuk membersihkan string dari markdown (```json) dan mengubahnya jadi Object
       const cleanAndParse = (str: string) => {
         try {
           const cleanStr = str.replace(/```json/gi, '').replace(/```/gi, '').trim();
@@ -173,31 +175,42 @@ export default function TambahNotulen() {
         }
       };
 
-      // HANDLING KASUS 1: Seluruh data berupa teks string JSON murni
-      if (typeof result === 'string') {
-        const parsed = cleanAndParse(result);
-        if (parsed) result = parsed;
-      }
-
-      // HANDLING KASUS 2 (Sesuai Screenshot): Object utama sukses didapat, tapi field 'isi_notulen' berisi string JSON bersarang
-      if (result && typeof result.isi_notulen === 'string' && result.isi_notulen.trim().startsWith('{')) {
-        const parsedNested = cleanAndParse(result.isi_notulen);
+      // Kasus 1: Balasan AI sepenuhnya berupa String (yang berisi JSON)
+      if (typeof rawResult === 'string') {
+        const parsed = cleanAndParse(rawResult);
+        if (parsed) {
+          finalJudul = parsed.judul_saran || parsed.judul || '';
+          finalIsi = parsed.isi_notulen || parsed.isi || '';
+          finalKesimpulan = parsed.kesimpulan || '';
+          finalTindakLanjut = parsed.tindak_lanjut || parsed.tindaklanjut || '';
+        } else {
+          finalIsi = rawResult; // Fallback jika teks biasa
+        }
+      } 
+      // Kasus 2: Balasan AI adalah Object, namun 'isi_notulen' berisi string JSON (seperti masalah sebelumnya)
+      else if (rawResult && typeof rawResult.isi_notulen === 'string' && rawResult.isi_notulen.trim().startsWith('{')) {
+        const parsedNested = cleanAndParse(rawResult.isi_notulen);
         if (parsedNested) {
-          finalJudul = parsedNested.judul_saran || parsedNested.judul || '';
+          finalJudul = parsedNested.judul_saran || parsedNested.judul || rawResult.judul_saran || '';
           finalIsi = parsedNested.isi_notulen || parsedNested.isi || '';
-          finalKesimpulan = parsedNested.kesimpulan || '';
-          finalTindakLanjut = parsedNested.tindak_lanjut || parsedNested.tindaklanjut || '';
+          finalKesimpulan = parsedNested.kesimpulan || rawResult.kesimpulan || '';
+          finalTindakLanjut = parsedNested.tindak_lanjut || parsedNested.tindaklanjut || rawResult.tindak_lanjut || '';
+        } else {
+          finalJudul = rawResult.judul_saran || rawResult.judul || '';
+          finalIsi = rawResult.isi_notulen || '';
+          finalKesimpulan = rawResult.kesimpulan || '';
+          finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
         }
       }
-
-      // KASUS NORMAL: Jika tidak bersarang, ambil langsung dari properti root object
-      if (!finalIsi && result) {
-        finalJudul = result.judul_saran || result.judul || '';
-        finalIsi = result.isi_notulen || result.isi || '';
-        finalKesimpulan = result.kesimpulan || '';
-        finalTindakLanjut = result.tindak_lanjut || result.tindaklanjut || '';
+      // Kasus 3: Normal Object (Sesuai harapan awal)
+      else if (rawResult && typeof rawResult === 'object') {
+        finalJudul = rawResult.judul_saran || rawResult.judul || '';
+        finalIsi = rawResult.isi_notulen || rawResult.isi || '';
+        finalKesimpulan = rawResult.kesimpulan || '';
+        finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
       }
 
+      // Masukkan hasil yang sudah dibersihkan ke dalam state form
       setForm(prev => ({
         ...prev,
         judul: prev.judul || finalJudul || prev.judul,
@@ -214,6 +227,7 @@ export default function TambahNotulen() {
       setAiStep('');
     }
   };
+  // =======================================================================
 
   const handleSave = async (status?: string) => {
     if (!form.judul || !form.tanggal) {
