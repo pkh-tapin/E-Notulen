@@ -45,10 +45,24 @@ export default function CetakNotulen() {
     window.print();
   };
 
-  // FUNGSI CANGGIH: Membersihkan karakter bintang (*) bawaan AI agar layar & cetakan 100% bersih
-  const cleanAiText = (str?: string) => {
+  // FUNGSI 1: Untuk Judul, Nama, Tempat (Hanya buang bintang tanpa efek HTML)
+  const cleanShortText = (str?: string) => {
     if (!str) return '';
     return str.replace(/\*/g, '').trim();
+  };
+
+  // FUNGSI 2 (SUPER CANGGIH): Merubah Markdown AI menjadi Format HTML Asli (Tebal & Spasi Rapi)
+  const renderAIText = (text?: string) => {
+    if (!text) return { __html: '' };
+    let htmlText = text
+      // Ubah **Teks** menjadi format huruf tebal (Bold)
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      // Ubah *teks* menjadi format miring (Italic) jika AI menggunakannya
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      // Rapikan strip awalan (-) menjadi bullet point yang lebih bersih
+      .replace(/^- /gm, '• ');
+    
+    return { __html: htmlText };
   };
 
   if (loading) {
@@ -67,19 +81,18 @@ export default function CetakNotulen() {
     );
   }
 
-  const pesertaList = data.peserta ? cleanAiText(data.peserta).split(/[\n,]+/).map(p => p.trim()).filter(Boolean) : [];
+  const pesertaList = data.peserta ? cleanShortText(data.peserta).split(/[\n,]+/).map(p => p.trim()).filter(Boolean) : [];
 
   return (
     <>
       <Head>
-        <title>Notulen — {cleanAiText(data.judul)}</title>
+        <title>Notulen — {cleanShortText(data.judul)}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Times+New+Roman&display=swap');
 
           /* ==============================================================
              MODE LAYAR (SCREEN) : Glassmorphism Soft Purple & Presentation
-             (TIDAK DIUBAH SAMA SEKALI - TETAP PERFECT SEPERTI ASLINYA)
              ============================================================== */
           @media screen {
             body { 
@@ -160,11 +173,20 @@ export default function CetakNotulen() {
               gap: 8px;
             }
 
+            /* CSS UNTUK MENJAGA SPASI DAN ENTER AI */
             .content-text {
               font-size: 1rem;
               line-height: 1.7;
               color: #e5e7eb;
-              white-space: pre-line;
+              white-space: pre-wrap; /* Wajib ada untuk menjaga Enter/Baris Baru AI */
+              word-wrap: break-word;
+            }
+            .content-text strong {
+              color: #fff;
+              font-weight: 700;
+            }
+            .content-text em {
+              color: #d8b4fe;
             }
 
             .print-only, .ttd-area { display: none !important; }
@@ -196,7 +218,7 @@ export default function CetakNotulen() {
           }
 
           /* ==============================================================
-             MODE CETAK (PRINT) : UPGRADE! LAPORAN RESMI KELAS DINAS/KANTOR
+             MODE CETAK (PRINT) : LAPORAN RESMI KELAS DINAS/KANTOR
              ============================================================== */
           @media print {
             @page { margin: 2.5cm; size: A4 portrait; }
@@ -244,7 +266,6 @@ export default function CetakNotulen() {
 
             .section-card { margin-bottom: 20px; padding: 0; background: transparent !important; border: none !important; }
 
-            /* Formal Info Table Layout */
             .info-table-print {
               width: 100%;
               border-collapse: collapse;
@@ -266,16 +287,18 @@ export default function CetakNotulen() {
               padding-bottom: 5px;
             }
 
-            /* UPGRADE: Teks Justify dan Spasi Elegan untuk Hasil AI */
+            /* CSS CETAK: MENJAGA PARAGRAF DAN BOLD AI */
             .content-text {
               text-align: justify !important;
               line-height: 1.6 !important;
-              white-space: pre-wrap !important;
+              white-space: pre-wrap !important; /* Wajib agar enter terdeteksi saat di-print */
               color: #000 !important;
               font-size: 12pt !important;
             }
+            .content-text strong {
+              font-weight: bold !important;
+            }
 
-            /* Formal Peserta Table */
             .peserta-table {
               width: 100%;
               border-collapse: collapse;
@@ -290,7 +313,6 @@ export default function CetakNotulen() {
             }
             .peserta-table th { background: transparent !important; font-weight: bold !important; text-align: center !important; }
 
-            /* TTD Area yang Sempurna */
             .ttd-area {
               display: flex !important;
               justify-content: space-between !important;
@@ -323,20 +345,17 @@ export default function CetakNotulen() {
       <div className="document-container">
         {/* ================= HEADER ================= */}
         <div className="main-title-wrap">
-          {/* Screen Only Badge */}
           <div className="screen-only badge-top">Notulen Rapat</div>
-          <div className="screen-only doc-title">{cleanAiText(data.judul)}</div>
+          <div className="screen-only doc-title">{cleanShortText(data.judul)}</div>
 
-          {/* Print Only Title */}
           <div className="print-only print-title">NOTULEN RAPAT</div>
-          <div className="print-only print-subtitle">{cleanAiText(data.judul)}</div>
+          <div className="print-only print-subtitle">{cleanShortText(data.judul)}</div>
         </div>
 
         {/* ================= INFORMASI RAPAT ================= */}
         <div className="section-card">
           <div className="screen-only section-header">📌 Detail Kegiatan</div>
           
-          {/* Mode Layar (Grid) */}
           <div className="screen-only info-grid">
             <div className="info-item">
               <span className="info-label">Tanggal</span>
@@ -352,19 +371,18 @@ export default function CetakNotulen() {
             </div>
             <div className="info-item">
               <span className="info-label">Tempat</span>
-              <span className="info-value">{cleanAiText(data.tempat) || '-'}</span>
+              <span className="info-value">{cleanShortText(data.tempat) || '-'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Pimpinan Rapat</span>
-              <span className="info-value">{cleanAiText(data.pimpinan_rapat) || '-'}</span>
+              <span className="info-value">{cleanShortText(data.pimpinan_rapat) || '-'}</span>
             </div>
             <div className="info-item">
               <span className="info-label">Notulis</span>
-              <span className="info-value">{cleanAiText(data.notulis) || '-'}</span>
+              <span className="info-value">{cleanShortText(data.notulis) || '-'}</span>
             </div>
           </div>
 
-          {/* Mode Cetak (Tabel Formal) */}
           <table className="print-only info-table-print">
             <tbody>
               <tr>
@@ -380,34 +398,36 @@ export default function CetakNotulen() {
               <tr>
                 <td className="it-label">Tempat</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{cleanAiText(data.tempat) || '-'}</td>
+                <td className="it-value">{cleanShortText(data.tempat) || '-'}</td>
               </tr>
               <tr>
                 <td className="it-label">Pimpinan Rapat</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{cleanAiText(data.pimpinan_rapat) || '-'}</td>
+                <td className="it-value">{cleanShortText(data.pimpinan_rapat) || '-'}</td>
               </tr>
               <tr>
                 <td className="it-label">Notulis</td>
                 <td className="it-colon">:</td>
-                <td className="it-value">{cleanAiText(data.notulis) || '-'}</td>
+                <td className="it-value">{cleanShortText(data.notulis) || '-'}</td>
               </tr>
               {data.agenda && (
                 <tr>
                   <td className="it-label">Agenda</td>
                   <td className="it-colon">:</td>
-                  <td className="it-value">{cleanAiText(data.agenda)}</td>
+                  {/* DangerouslySetInnerHTML digunakan agar teks tebal AI di Agenda tetap rapi */}
+                  <td className="it-value" dangerouslySetInnerHTML={renderAIText(data.agenda)} />
                 </tr>
               )}
             </tbody>
           </table>
         </div>
 
-        {/* Agenda (Screen Only, print already has it in table) */}
+        {/* Agenda (Screen Only) */}
         {data.agenda && (
           <div className="screen-only section-card">
             <div className="section-header">🎯 Agenda</div>
-            <div className="content-text">{cleanAiText(data.agenda)}</div>
+            {/* Inject AI Markdown HTML */}
+            <div className="content-text" dangerouslySetInnerHTML={renderAIText(data.agenda)} />
           </div>
         )}
 
@@ -442,7 +462,8 @@ export default function CetakNotulen() {
         {data.isi_notulen && (
           <div className="section-card">
             <div className="section-header">📝 Pembahasan / Jalannya Rapat</div>
-            <div className="content-text">{cleanAiText(data.isi_notulen)}</div>
+            {/* Inject AI Markdown HTML */}
+            <div className="content-text" dangerouslySetInnerHTML={renderAIText(data.isi_notulen)} />
           </div>
         )}
 
@@ -450,7 +471,8 @@ export default function CetakNotulen() {
         {data.kesimpulan && (
           <div className="section-card">
             <div className="section-header">✅ Kesimpulan</div>
-            <div className="content-text">{cleanAiText(data.kesimpulan)}</div>
+            {/* Inject AI Markdown HTML */}
+            <div className="content-text" dangerouslySetInnerHTML={renderAIText(data.kesimpulan)} />
           </div>
         )}
 
@@ -458,7 +480,8 @@ export default function CetakNotulen() {
         {data.tindak_lanjut && (
           <div className="section-card">
             <div className="section-header">🚀 Tindak Lanjut</div>
-            <div className="content-text">{cleanAiText(data.tindak_lanjut)}</div>
+            {/* Inject AI Markdown HTML */}
+            <div className="content-text" dangerouslySetInnerHTML={renderAIText(data.tindak_lanjut)} />
           </div>
         )}
 
@@ -466,12 +489,12 @@ export default function CetakNotulen() {
         <div className="print-only ttd-area">
           <div className="ttd-box">
             <div className="ttd-label">Notulis,</div>
-            <div className="ttd-name">{cleanAiText(data.notulis) || '_______________________'}</div>
+            <div className="ttd-name">{cleanShortText(data.notulis) || '_______________________'}</div>
             {data.notulis && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
           <div className="ttd-box">
             <div className="ttd-label">Pimpinan Rapat,</div>
-            <div className="ttd-name">{cleanAiText(data.pimpinan_rapat) || '_______________________'}</div>
+            <div className="ttd-name">{cleanShortText(data.pimpinan_rapat) || '_______________________'}</div>
             {data.pimpinan_rapat && <div className="ttd-nip">NIP. ________________________</div>}
           </div>
         </div>
