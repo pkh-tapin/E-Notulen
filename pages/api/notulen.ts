@@ -1,8 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../../lib/sheets';
-import { randomUUID } from 'crypto';
 
-// CRITICAL: Ditingkatkan ke 50MB agar teks AI seberapa pun panjangnya TIDAK kena Error 413 (Payload Too Large)
+// CANGGIH: Kapasitas besar agar teks AI super panjang tidak terkena Error 413 (Payload Too Large)
 export const config = {
   api: {
     bodyParser: {
@@ -11,32 +10,35 @@ export const config = {
   },
 };
 
-// Fungsi Helper: Google Sheets & Supabase benci 'undefined'. Ini akan mengubah undefined menjadi string kosong.
-const sanitizeData = (obj: any) => {
-  const sanitized = { ...obj };
-  Object.keys(sanitized).forEach(key => {
-    if (sanitized[key] === undefined) {
-      sanitized[key] = '';
+// HELPER SANITIZER: Mengubah nilai 'undefined' atau 'null' menjadi string kosong "" 
+// agar Google Sheets API tidak mogok/error saat proses penulisan data.
+const cleanObjectData = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy = Array.isArray(obj) ? [...obj] : { ...obj };
+  
+  for (const key in copy) {
+    if (copy[key] === undefined || copy[key] === null) {
+      copy[key] = ''; // Ganti semua yang kosong dengan string aman
+    } else if (typeof copy[key] === 'object') {
+      copy[key] = cleanObjectData(copy[key]); // Bersihkan rekursif jika ada objek bersarang
     }
-  });
-  return sanitized;
+  }
+  return copy;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // 1. SETTING CORS KELAS BERAT (Anti-Gagal di Browser Modern)
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, PATCH, DELETE, POST, PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  // 2. BYPASS PREFLIGHT CORS CEPAT
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
     // =========================================================================
-    // METHOD GET: MENGAMBIL DATA
+    // METHOD GET: AMBIL DATA NOTULEN
     // =========================================================================
     if (req.method === 'GET') {
       const { tanggal, id } = req.query;
@@ -54,81 +56,70 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       const data = await getAllNotulen();
-      // Auto-sorting pintar: Terbaru di atas
+      // Sorting otomatis: Tanggal terbaru ditaruh paling atas
       const sorted = data.sort((a: any, b: any) => {
-        const dateA = new Date(a.created_at || a.tanggal || 0).getTime();
-        const dateB = new Date(b.created_at || b.tanggal || 0).getTime();
+        const dateA = new Date(a.tanggal || 0).getTime();
+        const dateB = new Date(b.tanggal || 0).getTime();
         return dateB - dateA;
       });
-      
       return res.status(200).json(sorted);
     }
 
     // =========================================================================
-    // METHOD POST: SIMPAN DATA BARU (DARI AI GENERATOR)
+    // METHOD POST: SIMPAN NOTULEN BARU HASIL GENERATE AI
     // =========================================================================
     if (req.method === 'POST') {
       const body = req.body;
-      
-      if (!body.judul || !body.tanggal) {
-        return res.status(400).json({ error: 'Gagal Simpan: Judul dan tanggal wajib diisi' });
+      if (!body || !body.judul || !body.tanggal) {
+        return res.status(400).json({ error: 'Gagal: Judul dan tanggal wajib diisi' });
       }
-      
-      console.log('🔄 Memulai proses simpan NOTULEN AI ke Database...');
 
-      // Injeksi Cerdas: Pastikan selalu ada ID dan Timestamp
-      const payloadToSave = sanitizeData({
-        ...body,
-        id: body.id || randomUUID(),
-        created_at: body.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-      const saved = await saveNotulen(payloadToSave);
-      console.log('✅ Berhasil simpan ke Database dengan ID:', payloadToSave.id);
+      console.log('🔄 Memulai pembersihan data & sinkronisasi ke Google Sheets...');
       
-      // Return objek data langsung agar dibaca mulus oleh frontend
-      return res.status(201).json(saved || payloadToSave);
+      // Bersihkan data dari undefined tanpa menambahkan field baru yang bisa merusak struktur sheet
+      const cleanedBody = cleanObjectData(body);
+
+      // Jalankan fungsi simpan bawaan sistem Anda
+      const saved = await saveNotulen(cleanedBody);
+      console.log('✅ Sukses masuk database Google Sheets!');
+
+      // Kembalikan response sukses ke frontend agar loading screen selesai
+      return res.status(201).json(saved || cleanedBody);
     }
 
     // =========================================================================
-    // METHOD PUT: UPDATE DATA EXISTING
+    // METHOD PUT: UPDATE DATA NOTULEN
     // =========================================================================
     if (req.method === 'PUT') {
       const body = req.body;
-      if (!body.id) return res.status(400).json({ error: 'ID wajib diisi untuk update' });
-      
-      console.log(`🔄 Mengupdate Notulen ID: ${body.id}`);
-      
-      const payloadToUpdate = sanitizeData({
-        ...body,
-        updated_at: new Date().toISOString()
-      });
+      if (!body || !body.id) {
+        return res.status(400).json({ error: 'ID wajib diisi untuk melakukan pembaruan' });
+      }
 
-      const saved = await saveNotulen(payloadToUpdate);
-      return res.status(200).json(saved || payloadToUpdate);
+      console.log(`🔄 Mengupdate Data Notulen ID: ${body.id}`);
+      const cleanedBody = cleanObjectData(body);
+      const saved = await saveNotulen(cleanedBody);
+      return res.status(200).json(saved || cleanedBody);
     }
 
     // =========================================================================
-    // METHOD DELETE: HAPUS DATA
+    // METHOD DELETE: HAPUS NOTULEN
     // =========================================================================
     if (req.method === 'DELETE') {
       const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'ID wajib diisi untuk delete' });
-      
+      if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
+
       console.log(`🗑️ Menghapus Notulen ID: ${id}`);
       const ok = await deleteNotulen(id as string);
       return res.status(200).json({ success: ok });
     }
 
-    // Jika method nyasar
     return res.status(405).json({ error: 'Method tidak diizinkan' });
 
   } catch (error: any) {
-    // Error Logging Terminal yang Canggih
-    console.error('❌ [FATAL ERROR] API Notulen Gagal:', error);
+    console.error('❌ [CRITICAL SYSTEM ERROR]:', error);
     return res.status(500).json({ 
-      error: 'Terjadi kesalahan internal server saat menyimpan notulen.',
+      error: 'Gagal memproses atau menyimpan data ke Google Sheets.', 
       details: error.message 
     });
   }
