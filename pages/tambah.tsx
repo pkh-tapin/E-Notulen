@@ -131,7 +131,7 @@ export default function TambahNotulen() {
   };
 
   // =========================================================================
-  // PARSING BAJA: Menjamin ekstraksi teks bersih dari AI walau format JSON hancur
+  // PERBAIKAN MESIN AI: Pengekstrak Lapis Baja (Anti Error Parsing)
   // =========================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
@@ -157,59 +157,46 @@ export default function TambahNotulen() {
       });
       
       const rawResult = await res.json();
-
+      
       let finalJudul = '';
       let finalIsi = '';
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      const extractData = (data: any) => {
-        if (typeof data === 'object' && data !== null) return data;
-        if (typeof data === 'string') {
-          let cleanStr = data.replace(/```json/gi, '').replace(/```/gi, '').trim();
-          
-          try {
-            return JSON.parse(cleanStr); 
-          } catch (e1) {
-            try {
-              let fixedStr = cleanStr.replace(/\n/g, '\\n').replace(/\r/g, '');
-              return JSON.parse(fixedStr);
-            } catch (e2) {
-              const extractMatch = (key: string) => {
-                const match = cleanStr.match(new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|})`, 'i'));
-                return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
-              };
-              
-              return {
-                judul_saran: extractMatch('judul_saran') || extractMatch('judul'),
-                isi_notulen: extractMatch('isi_notulen') || extractMatch('isi'),
-                kesimpulan: extractMatch('kesimpulan'),
-                tindak_lanjut: extractMatch('tindak_lanjut') || extractMatch('tindaklanjut')
-              };
-            }
-          }
-        }
-        return null;
-      };
-
-      let parsedData = extractData(rawResult);
-
-      if (parsedData && typeof parsedData.isi_notulen === 'string' && parsedData.isi_notulen.trim().startsWith('{')) {
-        const nestedParsed = extractData(parsedData.isi_notulen);
-        if (nestedParsed && nestedParsed.isi_notulen) {
-          parsedData = { ...parsedData, ...nestedParsed };
-        }
+      // Ekstraktor Ekstrim: Memaksa mengambil data meskipun JSON dari Gemini rusak/kotor
+      let cleanStr = '';
+      if (typeof rawResult === 'string') {
+        cleanStr = rawResult.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      } else if (typeof rawResult === 'object') {
+        cleanStr = JSON.stringify(rawResult);
       }
 
-      if (parsedData) {
+      try {
+        // Percobaan 1: Parsing Normal
+        const parsedData = JSON.parse(cleanStr);
         finalJudul = parsedData.judul_saran || parsedData.judul || '';
         finalIsi = parsedData.isi_notulen || parsedData.isi || '';
         finalKesimpulan = parsedData.kesimpulan || '';
         finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
-      } else if (typeof rawResult === 'string') {
-        finalIsi = rawResult; 
+      } catch (e1) {
+        // Percobaan 2: Jika gagal, gunakan Regex untuk mencabut teks secara paksa
+        console.warn("JSON kotor terdeteksi, mengaktifkan mode ekstraksi paksa...");
+        const getMatch = (key: string) => {
+          const regex = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|})`, 'i');
+          const match = cleanStr.match(regex);
+          return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+        };
+
+        finalJudul = getMatch('judul_saran') || getMatch('judul');
+        finalIsi = getMatch('isi_notulen') || getMatch('isi');
+        finalKesimpulan = getMatch('kesimpulan');
+        finalTindakLanjut = getMatch('tindak_lanjut') || getMatch('tindaklanjut');
+        
+        // Fallback terakhir jika hancur total
+        if (!finalIsi) finalIsi = cleanStr;
       }
 
+      // Pembersih karakter newline (\n literal) menjadi enter sungguhan
       const formatText = (text: string) => {
         if (!text) return '';
         return String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"');
@@ -233,10 +220,12 @@ export default function TambahNotulen() {
   };
 
   const triggerDownload = (notulenData: FormData) => {
-    showToast('⬇️ Memulai unduhan otomatis PDF/DOC...');
-    // Logika unduh diproses di sini
+    showToast('⬇️ Data tersimpan. Silakan klik Cetak PDF di halaman Detail.');
   };
 
+  // =========================================================================
+  // PERBAIKAN SIMPAN DATA: Mencegah Error 500 karena Payload
+  // =========================================================================
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan tanggal wajib diisi');
@@ -247,6 +236,7 @@ export default function TambahNotulen() {
     const finalStatus = statusOverride || form.status || 'draft';
 
     try {
+      // Memastikan semua data bertipe String yang aman
       const payload = {
         judul: String(form.judul || ''),
         tanggal: String(form.tanggal || ''),
