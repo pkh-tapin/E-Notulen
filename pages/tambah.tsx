@@ -131,7 +131,7 @@ export default function TambahNotulen() {
   };
 
   // =========================================================================
-  // PARSER AI SUPER: Memaksa ekstraksi data tidak peduli seberapa kotor formatnya
+  // PARSING BAJA: Menjamin ekstraksi teks bersih dari AI walau format JSON hancur
   // =========================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
@@ -141,7 +141,7 @@ export default function TambahNotulen() {
     }
 
     setAiLoading(true);
-    setAiStep('🤖 AI sedang menyusun notulen...');
+    setAiStep('🤖 AI sedang merapikan notulen...');
 
     try {
       const res = await fetch('/api/ai?action=process', {
@@ -155,6 +155,7 @@ export default function TambahNotulen() {
           pimpinan: form.pimpinan_rapat
         })
       });
+      
       const rawResult = await res.json();
 
       let finalJudul = '';
@@ -162,50 +163,58 @@ export default function TambahNotulen() {
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      // Fungsi pembersihan literal \n menjadi enter yang sesungguhnya di Textarea
+      const extractData = (data: any) => {
+        if (typeof data === 'object' && data !== null) return data;
+        if (typeof data === 'string') {
+          let cleanStr = data.replace(/```json/gi, '').replace(/```/gi, '').trim();
+          
+          try {
+            return JSON.parse(cleanStr); 
+          } catch (e1) {
+            try {
+              let fixedStr = cleanStr.replace(/\n/g, '\\n').replace(/\r/g, '');
+              return JSON.parse(fixedStr);
+            } catch (e2) {
+              const extractMatch = (key: string) => {
+                const match = cleanStr.match(new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|})`, 'i'));
+                return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+              };
+              
+              return {
+                judul_saran: extractMatch('judul_saran') || extractMatch('judul'),
+                isi_notulen: extractMatch('isi_notulen') || extractMatch('isi'),
+                kesimpulan: extractMatch('kesimpulan'),
+                tindak_lanjut: extractMatch('tindak_lanjut') || extractMatch('tindaklanjut')
+              };
+            }
+          }
+        }
+        return null;
+      };
+
+      let parsedData = extractData(rawResult);
+
+      if (parsedData && typeof parsedData.isi_notulen === 'string' && parsedData.isi_notulen.trim().startsWith('{')) {
+        const nestedParsed = extractData(parsedData.isi_notulen);
+        if (nestedParsed && nestedParsed.isi_notulen) {
+          parsedData = { ...parsedData, ...nestedParsed };
+        }
+      }
+
+      if (parsedData) {
+        finalJudul = parsedData.judul_saran || parsedData.judul || '';
+        finalIsi = parsedData.isi_notulen || parsedData.isi || '';
+        finalKesimpulan = parsedData.kesimpulan || '';
+        finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
+      } else if (typeof rawResult === 'string') {
+        finalIsi = rawResult; 
+      }
+
       const formatText = (text: string) => {
         if (!text) return '';
         return String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"');
       };
 
-      // 1. Ubah apa pun balasan server menjadi String mutlak
-      let textToParse = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult);
-      
-      // Jika AI memuntahkan JSON di dalam properti tertentu, tangkap keseluruhan teksnya
-      if (rawResult && rawResult.isi_notulen && typeof rawResult.isi_notulen === 'string' && rawResult.isi_notulen.includes('judul_saran')) {
-        textToParse = rawResult.isi_notulen;
-      }
-
-      // 2. Ekstraksi Paksa: Cari blok {...}
-      let clean = textToParse.replace(/```json/gi, '').replace(/```/gi, '').trim();
-      const start = clean.indexOf('{');
-      const end = clean.lastIndexOf('}');
-
-      if (start !== -1 && end !== -1) {
-        try {
-          const jsonBlock = clean.substring(start, end + 1);
-          // Tangani escape ganda agar parse tidak gagal
-          const sanitizedBlock = jsonBlock.replace(/[\u0000-\u0019]+/g,"");
-          const parsed = JSON.parse(sanitizedBlock);
-          
-          finalJudul = parsed.judul_saran || parsed.judul || '';
-          finalIsi = parsed.isi_notulen || parsed.isi || '';
-          finalKesimpulan = parsed.kesimpulan || '';
-          finalTindakLanjut = parsed.tindak_lanjut || parsed.tindaklanjut || '';
-        } catch (e) {
-          console.error("Gagal parse JSON paksa:", e);
-          // Fallback: Jika hancur total, dump semuanya tapi tanpa format kurawal
-          finalIsi = clean; 
-        }
-      } else if (typeof rawResult === 'object') {
-        // Fallback klasik jika kebetulan objeknya bersih
-        finalJudul = rawResult.judul_saran || rawResult.judul || '';
-        finalIsi = rawResult.isi_notulen || rawResult.isi || '';
-        finalKesimpulan = rawResult.kesimpulan || '';
-        finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
-      }
-
-      // Set ke state, dan format karakter escape (\n) menjadi baris baru (enter)
       setForm(prev => ({
         ...prev,
         judul: finalJudul ? formatText(finalJudul) : prev.judul,
@@ -214,7 +223,7 @@ export default function TambahNotulen() {
         tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
       }));
 
-      showToast('✅ Notulen berhasil disusun dan dipilah AI!');
+      showToast('✅ Notulen berhasil digenerate oleh AI!');
     } catch (err: any) {
       showToast(`❌ ${err.message}`);
     } finally {
