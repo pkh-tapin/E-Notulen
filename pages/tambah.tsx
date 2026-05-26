@@ -158,6 +158,11 @@ export default function TambahNotulen() {
       
       const rawResult = await res.json();
       
+      // [PERBAIKAN KRUSIAL] - JIKA SERVER API GAGAL/TIMEOU, LANGSUNG LEMPAR ERROR, JANGAN LANJUT!
+      if (!res.ok) {
+        throw new Error(rawResult.error || rawResult.details || `Error ${res.status}: Gagal memproses data AI`);
+      }
+      
       let finalJudul = '';
       let finalIsi = '';
       let finalKesimpulan = '';
@@ -210,6 +215,11 @@ export default function TambahNotulen() {
         return String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"');
       };
 
+      // Pastikan AI benar-benar membalikkan data, bukan kosong
+      if (!finalIsi || finalIsi.trim() === '') {
+        throw new Error('AI mengembalikan hasil yang kosong. Silakan klik tombol Proses lagi.');
+      }
+
       setForm(prev => ({
         ...prev,
         judul: finalJudul ? formatText(finalJudul) : prev.judul,
@@ -218,6 +228,7 @@ export default function TambahNotulen() {
         tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
       }));
 
+      // HANYA MUNCUL JIKA DATA BENAR-BENAR BERHASIL DITAMPILKAN
       showToast('✅ Notulen berhasil digenerate oleh AI!');
     } catch (err: any) {
       showToast(`❌ ${err.message}`);
