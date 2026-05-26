@@ -1,211 +1,139 @@
-import { useState, useEffect } from 'react';
-import Head from 'next/head';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import Link from 'next/link';
-import { format, parseISO } from 'date-fns';
-import { id as idLocale } from 'date-fns/locale';
 
-interface Notulen {
-  id: string;
-  judul: string;
-  tanggal: string;
-  waktu_mulai: string;
-  waktu_selesai: string;
-  tempat: string;
-  pimpinan_rapat: string;
-  notulis: string;
-  peserta: string;
-  agenda: string;
-  isi_notulen: string;
-  kesimpulan: string;
-  tindak_lanjut: string;
-  status: string;
-  created_at: string;
-}
-
-export default function LihatNotulen() {
+export default function DetailNotulen() {
   const router = useRouter();
   const { id } = router.query;
-  const [data, setData] = useState<Notulen | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    fetch(`/api/notulen?id=${id}`)
-      .then(r => r.json())
-      .then(d => { 
-        setData(d); 
-        setLoading(false); 
-      })
-      .catch(() => setLoading(false));
+    if (id) {
+      fetch(`/api/notulen?id=${id}`)
+        .then(res => res.json())
+        .then(resData => {
+          if (!resData.error) setData(resData);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    }
   }, [id]);
 
-  // --- ENGINE PARSER OTOMATIS: MENANGANI STRINGS/OBJECT JSON DARI GEMINI AI ---
-  const formatContent = (rawText: string) => {
-    if (!rawText) return <p className="text-gray-400 italic">Tidak ada data pembahasan.</p>;
-
-    let textToRender = rawText;
-
-    // Deteksi jika teks merupakan JSON mentah akibat belum diparse saat penyimpanan
-    if (typeof rawText === 'string' && rawText.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(rawText);
-        // Ambil isi spesifik bidang teks jika ada di objek hasil parse
-        textToRender = parsed.isi_notulen || parsed.isi || parsed.kesimpulan || parsed.tindak_lanjut || Object.values(parsed)[0];
-      } catch (e) {
-        console.error("Gagal melakukan auto-parsing JSON string:", e);
-      }
-    }
-
-    // Pastikan hasil akhir dikonversi ke tipe string dan hapus escape karakter mentah (\n)
-    const secureString = String(textToRender).replace(/\\n/g, '\n');
-
-    // Pemrosesan Baris & Pemformatan Karya Ilmiah Terstruktur (A. 1. a. 1))
-    return secureString.split('\n').map((line, i) => {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) return <div key={i} className="h-2" />;
-
-      // Hapus simbol markdown bintang atau strip jika ada di awal baris
-      const cleanText = trimmedLine.replace(/^[\*\-\u2022]\s*/, '').trim();
-
-      // Deteksi Header Utama Romawi (misal: I. PEMBUKAAN)
-      if (/^[IVXLCDM]+\.\s+/i.test(trimmedLine)) {
-        return (
-          <h3 key={i} className="text-sm font-bold text-purple-300 mt-4 mb-2 tracking-wide uppercase border-b border-purple-500/10 pb-1">
-            {cleanText}
-          </h3>
-        );
-      }
-
-      // Deteksi Sub-Bab Abjad Besar (A., B., C., dst.)
-      if (/^[A-Z]\.\s+/.test(trimmedLine)) {
-        return (
-          <div key={i} className="font-semibold text-white pl-2 mt-2 mb-1 text-sm flex gap-1">
-            <span>{trimmedLine.match(/^[A-Z]\./)?.[0]}</span>
-            <span className="text-justify">{trimmedLine.replace(/^[A-Z]\.\s*/, '')}</span>
-          </div>
-        );
-      }
-
-      // Deteksi Penomoran Angka (1., 2., 3., dst.)
-      if (/^\d+\.\s+/.test(trimmedLine)) {
-        return (
-          <div key={i} className="text-purple-200/90 pl-6 mb-1 text-sm flex gap-1.5">
-            <span className="font-mono text-purple-400 font-medium">{trimmedLine.match(/^\d+\./)?.[0]}</span>
-            <span className="text-justify">{trimmedLine.replace(/^\d+\.\s*/, '')}</span>
-          </div>
-        );
-      }
-
-      // Deteksi Penomoran Abjad Kecil (a., b., c., dst.)
-      if (/^[a-z]\.\s+/.test(trimmedLine)) {
-        return (
-          <div key={i} className="text-gray-300 pl-10 mb-1 text-[13px] flex gap-1.5">
-            <span className="font-mono text-fuchsia-400 font-medium">{trimmedLine.match(/^[a-z]\./)?.[0]}</span>
-            <span className="text-justify">{trimmedLine.replace(/^[a-z]\.\s*/, '')}</span>
-          </div>
-        );
-      }
-
-      // Paragraf Normal / Teks Penjelas
-      return (
-        <p key={i} className="text-gray-300 text-sm leading-relaxed text-justify pl-6 mb-2">
-          {cleanText}
-        </p>
-      );
-    });
+  const handleDownloadPDF = () => {
+    // Logika unduh otomatis setelah selesai file pdf/doc dibuat
+    alert("Proses generate dan download otomatis PDF/DOC dimulai...");
+    // Integrasikan library PDF generator (seperti jspdf/html2canvas) di sini nantinya
   };
 
-  const handleCopyText = () => {
-    if (!data) return;
-    let cleanNotes = data.isi_notulen;
-    if (cleanNotes.trim().startsWith('{')) {
-      try { cleanNotes = JSON.parse(cleanNotes).isi_notulen || cleanNotes; } catch {}
-    }
-    const textToCopy = `NOTULEN RAPAT: ${data.judul}\n` + 
-      `Hari/Tanggal: ${data.tanggal ? format(parseISO(data.tanggal), 'EEEE, dd MMMM yyyy', { locale: idLocale }) : '-'}\n\n` +
-      `ISI NOTULEN:\n${cleanNotes.replace(/\\n/g, '\n')}`;
-    
-    navigator.clipboard.writeText(textToCopy);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center" style={{ background: '#0b0f19' }}><div className="w-8 h-8 border-3 border-purple-500/20 border-t-purple-400 rounded-full animate-spin"></div></div>;
-  }
-  if (!data) return <div className="min-h-screen flex items-center justify-center text-white font-medium" style={{ background: '#0b0f19' }}>Data tidak ditemukan.</div>;
+  if (loading) return <div className="min-h-screen bg-[#020818] text-cyan-300 flex items-center justify-center font-mono">Loading Data...</div>;
+  if (!data) return <div className="min-h-screen bg-[#020818] text-red-500 flex items-center justify-center font-mono">⚠️ Data Tidak Ditemukan</div>;
 
   return (
     <>
       <Head>
-        <title>{data.judul} — Arsip Digital</title>
+        <title>{data?.judul || 'Detail'} - Arsip Digital</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
           body {
             background: linear-gradient(135deg, #090d16 0%, #111726 100%);
-            font-family: 'Inter', sans-serif;
-            color: #f3f4f6;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
           }
-          .glass-sheet {
-            background: rgba(255, 255, 255, 0.02);
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 24px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
-          }
-          .section-marker {
-            color: #c4b5fd;
-            font-weight: 700;
-            font-size: 0.85rem;
-            letter-spacing: 0.1em;
-            margin-bottom: 0.75rem;
-            margin-top: 2rem;
-            border-left: 3px solid #8b5cf6;
-            padding-left: 10px;
-            text-transform: uppercase;
-          }
-        `}</Head>
+        `}</style> 
+      </Head>
 
-      <div className="w-full max-w-4xl mx-auto px-4 py-6">
-        <Link href="/">
-          <button className="text-xs font-bold text-purple-400 hover:text-purple-300 bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 px-4 py-2 rounded-xl transition flex items-center gap-1.5 mb-6">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" /></svg>
-            Kembali ke Dashboard
-          </button>
-        </Link>
+      {/* Desain Fit to Screen & No Horizontal Scroll */}
+      <div className="min-h-screen bg-[#020818] text-slate-200 w-full overflow-x-hidden font-sans pb-10">
         
-        <div className="glass-sheet p-6 md:p-10">
-          <div className="text-center border-b border-white/5 pb-6 mb-6">
-            <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase">MANUSKRIP HASIL AI</span>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white mt-3 mb-4 tracking-tight leading-snug">{data.judul}</h1>
-            <button onClick={handleCopyText} className="text-xs font-bold px-5 py-2.5 rounded-xl text-white transition-all hover:opacity-90 flex items-center gap-2 mx-auto shadow-md" style={{ background: copied ? '#10b981' : 'linear-gradient(135deg, #a78bfa, #6d28d9)' }}>
-              {copied ? '✓ Berhasil Disalin' : '⚡ Salin Konten'}
-            </button>
+        {/* Navbar Mewah Glassmorphism */}
+        <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur-xl bg-[#040d2b]/80 w-full">
+          <div className="w-full max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <Link href="/" className="text-cyan-400 hover:text-cyan-300 transition-colors font-bold tracking-wider flex items-center gap-2 text-sm md:text-base">
+              <span>&larr;</span> KEMBALI
+            </Link>
+            
+            <div className="flex gap-4 items-center">
+              {/* Login khusus menggunakan Gembok saja, setting hanya untuk admin */}
+              <button onClick={() => setIsAdmin(!isAdmin)} className="text-slate-500 hover:text-cyan-400 transition-colors" title="Akses Admin">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+              </button>
+              
+              {isAdmin && (
+                <Link href={`/tambah?edit=${id}`} className="hidden md:block px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded text-cyan-400 text-sm hover:bg-cyan-500/30 transition-all">
+                  Edit Data
+                </Link>
+              )}
+              
+              <button onClick={handleDownloadPDF} className="px-4 py-2 bg-cyan-500 border border-cyan-400 rounded text-slate-900 font-semibold text-sm hover:bg-cyan-400 transition-all shadow-[0_0_10px_rgba(34,211,238,0.3)]">
+                ⬇️ Download PDF
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        {/* Konten Utama */}
+        <div className="w-full max-w-5xl mx-auto px-4 py-8 space-y-6">
+          
+          {/* Header Informasi */}
+          <div className="rounded-xl p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-cyan-900/50 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
+            <h1 className="text-xl md:text-2xl font-bold text-cyan-300 mb-6 leading-snug">{data.judul}</h1>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 border-t border-cyan-900/30 pt-6">
+              <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Tanggal</p>
+                <p className="font-medium text-sm md:text-base">{data.tanggal}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Waktu</p>
+                <p className="font-medium text-sm md:text-base">{data.waktu_mulai} - {data.waktu_selesai}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Tempat</p>
+                <p className="font-medium text-sm md:text-base">{data.tempat}</p>
+              </div>
+              <div>
+                <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">Pimpinan Rapat</p>
+                <p className="font-medium text-sm md:text-base">{data.pimpinan_rapat}</p>
+              </div>
+            </div>
           </div>
 
-          {/* Meta Info Header */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-black/20 p-4 rounded-xl border border-white/5 mb-4">
-            <div><label className="block text-purple-400 text-[10px] font-bold tracking-wider uppercase mb-0.5">TANGGAL</label><div className="text-xs font-semibold text-white">{data.tanggal ? format(parseISO(data.tanggal), 'dd MMMM yyyy', { locale: idLocale }) : '-'}</div></div>
-            <div><label className="block text-purple-400 text-[10px] font-bold tracking-wider uppercase mb-0.5">LOKASI</label><div className="text-xs font-semibold text-white truncate">{data.tempat || '-'}</div></div>
-            <div><label className="block text-purple-400 text-[10px] font-bold tracking-wider uppercase mb-0.5">PIMPINAN</label><div className="text-xs font-semibold text-white truncate">{data.pimpinan_rapat || '-'}</div></div>
-            <div><label className="block text-purple-400 text-[10px] font-bold tracking-wider uppercase mb-0.5">NOTULIS</label><div className="text-xs font-semibold text-white truncate">{data.notulis || '-'}</div></div>
+          {/* Isi Notulen AI */}
+          <div className="rounded-xl p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-cyan-900/50 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
+            <h2 className="text-base md:text-lg font-semibold text-cyan-300 tracking-wider mb-6 flex items-center gap-2">
+              <span className="w-1 h-5 rounded bg-cyan-400 inline-block" /> HASIL NOTULEN
+            </h2>
+            
+            <div className="space-y-8">
+              <div>
+                <h3 className="text-slate-500 text-xs uppercase tracking-wider mb-3">Agenda & Pembahasan Lengkap</h3>
+                <div className="text-slate-300 whitespace-pre-wrap leading-relaxed text-sm md:text-base bg-[#0a1536] p-4 rounded-lg border border-cyan-900/30">
+                  {data.isi_notulen}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-slate-500 text-xs uppercase tracking-wider mb-3">Kesimpulan</h3>
+                <div className="text-slate-300 whitespace-pre-wrap leading-relaxed text-sm md:text-base bg-green-500/5 p-4 rounded-lg border border-green-500/20">
+                  {data.kesimpulan}
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="text-slate-500 text-xs uppercase tracking-wider mb-3">Rencana Tindak Lanjut</h3>
+                <div className="text-slate-300 whitespace-pre-wrap leading-relaxed text-sm md:text-base bg-orange-500/5 p-4 rounded-lg border border-orange-500/20 font-mono">
+                  {data.tindak_lanjut}
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Dynamic Content Structure */}
-          <div className="section-marker">Isi Pembahasan Utama</div>
-          <div className="bg-white/[0.01] border border-white/[0.03] p-4 rounded-xl">{formatContent(data.isi_notulen)}</div>
-
-          <div className="section-marker">Kesimpulan Strategis</div>
-          <div className="bg-emerald-500/[0.02] border border-emerald-500/10 p-4 rounded-xl">{formatContent(data.kesimpulan)}</div>
-
-          <div className="section-marker">Rencana Tindak Lanjut (RTL)</div>
-          <div className="bg-amber-500/[0.02] border border-amber-500/10 p-4 rounded-xl">{formatContent(data.tindak_lanjut)}</div>
         </div>
       </div>
     </>
