@@ -2,46 +2,55 @@ import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 
-// ==========================================
-// INTERFACES & TYPES
-// ==========================================
+// =========================================================================
+// INTERFACES & DATA STRUCT (Sesuai Blueprint Database Google Sheets Anda)
+// =========================================================================
 interface Notulen {
   id: string;
   judul: string;
   tanggal: string;
+  waktu_mulai?: string;
+  waktu_selesai?: string;
   tempat: string;
   pimpinan_rapat: string;
+  notulis?: string;
+  peserta?: string;
+  agenda?: string;
+  isi_notulen: string;
+  kesimpulan?: string;
+  tindak_lanjut?: string;
   status: string;
 }
 
-export default function DashboardAwal() {
-  // ==========================================
-  // STATE MANAGEMENT
-  // ==========================================
+export default function DashboardPremium() {
+  // =========================================================================
+  // STATE MANAGEMENT SYSTEMS
+  // =========================================================================
   const [data, setData] = useState<Notulen[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Fitur Otorisasi Admin
+  // Sistem Otorisasi Akses Gembok Admin
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // Fitur Interaksi Data
+  // Sistem Manajemen Proteksi Penghapusan Data
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // Fitur Pencarian & Filter
+  // Sistem Filter, Pencarian Makro, & Navigasi Paginasi
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  
-  // Fitur Paginasi
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
+  const itemsPerPage = 6; // Optimal untuk tampilan grid mobile & desktop fit screen
 
-  // ==========================================
-  // FETCH DATA (TERBUKA UNTUK PUBLIK)
-  // ==========================================
+  // State Pelacak Cetak PDF per Item
+  const [printingId, setPrintingId] = useState<string | null>(null);
+
+  // =========================================================================
+  // ENGINE AMBIL DATA SINKRON (REALTIME DRIVEN)
+  // =========================================================================
   useEffect(() => {
     fetchData();
   }, []);
@@ -52,46 +61,48 @@ export default function DashboardAwal() {
       const res = await fetch('/api/notulen');
       const result = await res.json();
       if (!result.error && Array.isArray(result)) {
+        // Pengurutan otomatis berdasarkan tanggal terbaru (Kronologis)
         const sortedData = result.sort((a: any, b: any) => {
           return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
         });
         setData(sortedData);
       }
     } catch (err) {
-      console.error("Gagal mengambil data", err);
+      console.error("Gagal sinkronisasi database sheets:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // ==========================================
-  // LOGIKA PENCARIAN & FILTER CANGGIH
-  // ==========================================
+  // =========================================================================
+  // LOGIKA FILTERING & PENCARIAN CERDAS
+  // =========================================================================
   const filteredData = useMemo(() => {
     return data.filter(item => {
       const matchSearch = (item.judul?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
-                          (item.pimpinan_rapat?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+                          (item.pimpinan_rapat?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                          (item.tempat?.toLowerCase() || '').includes(searchTerm.toLowerCase());
       const matchStatus = statusFilter === 'all' || item.status === statusFilter;
       return matchSearch && matchStatus;
     });
   }, [data, searchTerm, statusFilter]);
 
-  // Logika Paginasi
+  // Kalkulasi Pembagian Halaman Paginasi
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   useEffect(() => {
-    setCurrentPage(1); // Reset halaman jika filter berubah
+    setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
-  // ==========================================
-  // LOGIKA ADMIN & MODAL PIN
-  // ==========================================
+  // =========================================================================
+  // MANAJEMEN AUTENTIKASI MODAL PIN GEMBOK
+  // =========================================================================
   const handleAdminToggle = () => {
     if (isAdmin) {
-      setIsAdmin(false); // Logout langsung
+      setIsAdmin(false); 
     } else {
-      setShowPinModal(true); // Tampilkan modal login
+      setShowPinModal(true);
       setPinInput('');
       setPinError('');
     }
@@ -99,18 +110,18 @@ export default function DashboardAwal() {
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === '1234') { // PIN DEFAULT ADMIN
+    if (pinInput === '1234') { // PIN COCOK
       setIsAdmin(true);
       setShowPinModal(false);
     } else {
-      setPinError('PIN yang Anda masukkan salah!');
+      setPinError('PIN Otorisasi Salah, Akses Ditolak!');
       setPinInput('');
     }
   };
 
-  // ==========================================
-  // LOGIKA HAPUS DATA
-  // ==========================================
+  // =========================================================================
+  // LOGIKA EKSEKUSI PENGHAPUSAN AMAN
+  // =========================================================================
   const confirmDelete = async () => {
     if (!deleteId) return;
     setIsDeleting(true);
@@ -120,27 +131,142 @@ export default function DashboardAwal() {
         setData(data.filter(item => item.id !== deleteId));
         setDeleteId(null);
       } else {
-        alert("Gagal menghapus data di server.");
+        alert("Gagal menghapus entri data dari server.");
       }
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan jaringan.");
+      alert("Masalah koneksi internet/jaringan gagal.");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // ==========================================
-  // STATISTIK DASHBOARD
-  // ==========================================
-  const statTotal = data.length;
-  const statFinal = data.filter(d => d.status === 'final').length;
-  const statDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length;
+  // =========================================================================
+  // MESIN CETAK PDF PREMIUM (FORMAL INDONESIAN OFFICIAL DOCUMENT TEMPLATE)
+  // =========================================================================
+  const handleCetakPDF = (item: Notulen) => {
+    setPrintingId(item.id);
+
+    // Skrip Struktur HTML untuk menghasilkan cetakan resmi instansi
+    const printContainer = document.createElement('div');
+    printContainer.style.position = 'fixed';
+    printContainer.style.left = '-9999px';
+    printContainer.style.top = '-9999px';
+    printContainer.innerHTML = `
+      <div id="print-capture-area" style="padding: 20mm 15mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; line-height: 1.6; font-size: 12pt;">
+        <div style="text-align: center; border-b: 3px double #000; padding-bottom: 10px; margin-bottom: 20px;">
+          <h2 style="margin: 0; uppercase; font-size: 16pt; tracking-wide: 1px;">NOTULEN RAPAT</h2>
+          <p style="margin: 5px 0 0 0; font-size: 10pt; color: #333;">Sistem Dokumentasi & Arsip Digital Otomatis</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11pt;">
+          <tr>
+            <td style="width: 25%; font-weight: bold; padding: 5px 0; vertical-align: top;">Hari / Tanggal</td>
+            <td style="width: 3%; vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top;">${item.tanggal || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 5px 0; vertical-align: top;">Waktu Pelaksanaan</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 5px 0; vertical-align: top;">Tempat Rapat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top;">${item.tempat || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 5px 0; vertical-align: top;">Pimpinan Rapat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top;">${item.pimpinan_rapat || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 5px 0; vertical-align: top;">Notulis / Pencatat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top;">${item.notulis || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 5px 0; vertical-align: top;">Daftar Peserta</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 5px 0; vertical-align: top; white-space: pre-wrap;">${item.peserta || '-'}</td>
+          </tr>
+        </table>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="border-bottom: 1px solid #000; padding-bottom: 3px; font-size: 12pt; uppercase; margin-bottom: 8px;">I. AGENDA RAPAT</h3>
+          <p style="margin: 0; padding-left: 15px; white-space: pre-wrap;">${item.agenda || 'Pembahasan internal.'}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="border-bottom: 1px solid #000; padding-bottom: 3px; font-size: 12pt; uppercase; margin-bottom: 8px;">II. PEMBAHASAN UTAMA</h3>
+          <div style="margin: 0; padding-left: 15px; white-space: pre-wrap; text-align: justify;">${item.isi_notulen}</div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h3 style="border-bottom: 1px solid #000; padding-bottom: 3px; font-size: 12pt; uppercase; margin-bottom: 8px;">III. KESIMPULAN RAPAT</h3>
+          <p style="margin: 0; padding-left: 15px; white-space: pre-wrap; text-align: justify;">${item.kesimpulan || '-'}</p>
+        </div>
+
+        <div style="margin-bottom: 35px;">
+          <h3 style="border-bottom: 1px solid #000; padding-bottom: 3px; font-size: 12pt; uppercase; margin-bottom: 8px;">IV. RENCANA TINDAK LANJUT (RTL)</h3>
+          <p style="margin: 0; padding-left: 15px; font-family: monospace; white-space: pre-wrap;">${item.tindak_lanjut || '-'}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 50px; font-size: 11pt;">
+          <tr>
+            <td style="width: 50%; text-align: center; padding-bottom: 60px;">Pimpinan Rapat,</td>
+            <td style="width: 50%; text-align: center; padding-bottom: 60px;">Notulis Rapat,</td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-weight: bold; text-decoration: underline;">( ${item.pimpinan_rapat || '........................'} )</td>
+            <td style="text-align: center; font-weight: bold; text-decoration: underline;">( ${item.notulis || '........................'} )</td>
+          </tr>
+        </table>
+      </div>
+    `;
+
+    document.body.appendChild(printContainer);
+
+    const opt = {
+      margin:       0,
+      filename:     `NOTULEN_${item.tanggal || 'RAPAT'}_${item.id.substring(0,5)}.pdf`,
+      image:        { type: 'jpeg', quality: 1 },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    const runHtml2Pdf = () => {
+      (window as any).html2pdf().set(opt).from(document.getElementById('print-capture-area')).save().then(() => {
+        setPrintingId(null);
+        document.body.removeChild(printContainer);
+      }).catch((err: any) => {
+        console.error(err);
+        alert("Eror cetak dokumen!");
+        setPrintingId(null);
+        document.body.removeChild(printContainer);
+      });
+    };
+
+    // Auto load CDN engine tanpa merusak project
+    if (!(window as any).html2pdf) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = runHtml2Pdf;
+      document.head.appendChild(script);
+    } else {
+      runHtml2Pdf();
+    }
+  };
+
+  // Kalkulasi Dashboard Berdasarkan Data Aktual
+  const hitungTotal = data.length;
+  const hitungFinal = data.filter(d => d.status === 'final').length;
+  const hitungDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length;
 
   return (
     <>
       <Head>
-        <title>Dashboard - Arsip Notulen Digital</title>
+        <title>Arsip Notulen Digital Premium</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&display=swap');
@@ -149,234 +275,248 @@ export default function DashboardAwal() {
             font-family: 'Exo 2', sans-serif;
             overflow-x: hidden;
           }
-          /* Custom Scrollbar */
-          ::-webkit-scrollbar { width: 8px; }
+          ::-webkit-scrollbar { width: 6px; }
           ::-webkit-scrollbar-track { background: #020818; }
-          ::-webkit-scrollbar-thumb { background: #22d3ee40; border-radius: 4px; }
+          ::-webkit-scrollbar-thumb { background: #22d3ee30; border-radius: 10px; }
           ::-webkit-scrollbar-thumb:hover { background: #22d3ee; }
         `}</style>
       </Head>
 
-      <div className="min-h-screen text-slate-200 w-full relative">
+      <div className="min-h-screen text-slate-200 w-full relative overflow-x-hidden">
         
-        {/* ========================================== */}
-        {/* MODAL PIN ADMIN (GLASSMORPHISM) */}
-        {/* ========================================== */}
+        {/* ========================================================================= */}
+        {/* MODAL INTEGRASI PIN ADMIN (GLASSMORPHISM LUXURY) */}
+        {/* ========================================================================= */}
         {showPinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-[#020818]/80 transition-all">
-            <div className="bg-[#040d2b] border border-cyan-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(34,211,238,0.15)] animate-fade-up">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-xl bg-[#020818]/80 transition-all">
+            <div className="bg-[#040d2b]/90 border border-cyan-500/40 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_40px_rgba(34,211,238,0.2)]">
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-cyan-300">Otorisasi Admin</h3>
-                <button onClick={() => setShowPinModal(false)} className="text-slate-500 hover:text-red-400">
+                <h3 className="text-lg font-bold text-cyan-300 tracking-wider">Akses Kunci Admin</h3>
+                <button onClick={() => setShowPinModal(false)} className="text-slate-400 hover:text-red-400 transition-colors">
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
               </div>
               <form onSubmit={handlePinSubmit}>
-                <div className="mb-4">
-                  <label className="block text-slate-400 text-xs uppercase tracking-wider mb-2">Masukkan PIN</label>
+                <div className="mb-5">
+                  <label className="block text-slate-400 text-xs uppercase tracking-widest mb-2">PIN SISTEM</label>
                   <input 
                     type="password" 
                     value={pinInput}
                     onChange={(e) => setPinInput(e.target.value)}
                     autoFocus
-                    className="w-full px-4 py-3 rounded-lg bg-[#0a1536] border border-cyan-900/50 text-white focus:border-cyan-400 outline-none transition-colors text-center text-2xl tracking-widest font-mono"
+                    className="w-full px-4 py-3 rounded-xl bg-[#0a1536] border border-cyan-900 text-white focus:border-cyan-400 outline-none text-center text-2xl tracking-widest font-mono transition-all"
                     placeholder="••••"
                   />
-                  {pinError && <p className="text-red-400 text-xs mt-2">{pinError}</p>}
+                  {pinError && <p className="text-red-400 text-xs mt-2 text-center font-medium">{pinError}</p>}
                 </div>
-                <button type="submit" className="w-full py-3 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 rounded-lg hover:bg-cyan-500/30 transition-all font-semibold">
-                  Buka Kunci Akses
+                <button type="submit" className="w-full py-3 bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 rounded-xl hover:bg-cyan-500/40 transition-all text-sm font-bold tracking-widest">
+                  BUKA OTORISASI
                 </button>
               </form>
             </div>
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* MODAL KONFIRMASI HAPUS */}
-        {/* ========================================== */}
+        {/* ========================================================================= */}
+        {/* MODAL KONFIRMASI HAPUS DATA ANTI KELALAIAN */}
+        {/* ========================================================================= */}
         {deleteId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-[#020818]/80">
-            <div className="bg-[#040d2b] border border-red-500/30 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.15)] animate-fade-up">
-              <h3 className="text-xl font-bold text-red-400 mb-2">Hapus Dokumen?</h3>
-              <p className="text-slate-400 text-sm mb-6">Tindakan ini tidak dapat dibatalkan. Dokumen akan dihapus permanen dari database.</p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-[#020818]/90">
+            <div className="bg-[#040d2b] border border-red-500/40 rounded-2xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+              <h3 className="text-lg font-bold text-red-400 mb-2 uppercase tracking-wide">Hapus Permanen?</h3>
+              <p className="text-slate-400 text-xs leading-relaxed mb-6">Tindakan ini akan menghapus data di Google Sheet secara permanen. File tidak bisa dipulihkan.</p>
               <div className="flex gap-3">
-                <button onClick={() => setDeleteId(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors text-sm">Batal</button>
-                <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500/20 border border-red-500/50 text-red-400 rounded-lg hover:bg-red-500/30 transition-all text-sm font-semibold">
-                  {isDeleting ? 'Menghapus...' : 'Ya, Hapus'}
+                <button onClick={() => setDeleteId(null)} disabled={isDeleting} className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl hover:bg-slate-700 transition-colors text-xs font-semibold">Batal</button>
+                <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 py-2.5 bg-red-500/10 border border-red-500/50 text-red-400 rounded-xl hover:bg-red-500/30 transition-all text-xs font-bold">
+                  {isDeleting ? 'Memproses...' : 'Ya, Bersihkan'}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* NAVBAR */}
-        {/* ========================================== */}
-        <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur-xl bg-[#040d2b]/90 w-full shadow-lg">
+        {/* ========================================================================= */}
+        {/* TOP COMPACT FIXED NAVIGATION BAR */}
+        {/* ========================================================================= */}
+        <nav className="border-b border-cyan-500/10 sticky top-0 z-40 backdrop-blur-xl bg-[#040d2b]/80 w-full shadow-md">
           <div className="w-full max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded bg-cyan-500/20 border border-cyan-400 flex items-center justify-center text-cyan-400 font-bold">N</div>
-              <h1 className="text-cyan-400 font-bold tracking-widest text-lg hidden md:block">
-                ARSIP<span className="text-white">NOTULEN</span>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white font-black text-sm shadow-[0_0_10px_rgba(34,211,238,0.4)]">N</div>
+              <h1 className="text-cyan-400 font-bold tracking-widest text-sm uppercase">
+                Maju<span className="text-white">Arsip</span>
               </h1>
             </div>
             
-            <div className="flex gap-3 md:gap-4 items-center">
-              {/* TOMBOL GEMBOK ADMIN */}
+            <div className="flex gap-2 items-center">
+              {/* TOMBOL GEMBOK ADMIN LOCK LOGIC */}
               <button 
                 onClick={handleAdminToggle} 
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all border ${isAdmin ? 'bg-cyan-900/40 border-cyan-500 text-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.4)]' : 'bg-transparent border-transparent text-slate-500 hover:text-cyan-400 hover:bg-cyan-900/20'}`}
-                title={isAdmin ? "Tutup Akses Admin" : "Buka Akses Admin"}
+                className={`flex items-center justify-center p-2 rounded-lg transition-all border ${isAdmin ? 'bg-cyan-900/40 border-cyan-500 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]' : 'bg-transparent border-transparent text-slate-500 hover:text-cyan-400 hover:bg-cyan-900/20'}`}
+                title={isAdmin ? "Kunci Admin" : "Buka Fitur Manajemen (Admin)"}
               >
                 {isAdmin ? (
-                  <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg><span className="text-xs font-bold hidden md:inline">ADMIN AKTIF</span></>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path></svg>
                 ) : (
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 )}
               </button>
 
               {isAdmin && (
-                <Link href="/tambah" className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg text-white font-semibold text-xs md:text-sm hover:from-cyan-500 hover:to-blue-500 transition-all shadow-[0_0_15px_rgba(34,211,238,0.4)] flex items-center gap-2">
-                  <span>+</span> <span className="hidden md:inline">Tambah Notulen</span>
+                <Link href="/tambah" className="px-3 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-lg text-white font-bold text-xs uppercase tracking-wider hover:from-cyan-500 hover:to-blue-500 transition-all shadow-lg flex items-center gap-1">
+                  <span>+ Add Data</span>
                 </Link>
               )}
             </div>
           </div>
         </nav>
 
-        {/* ========================================== */}
-        {/* HERO SECTION & STATISTIK */}
-        {/* ========================================== */}
-        <div className="w-full max-w-7xl mx-auto px-4 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="rounded-xl p-6 bg-gradient-to-br from-[#040d2b] to-[#0a1536] border border-cyan-900/50 shadow-lg relative overflow-hidden">
-              <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-500/10 rounded-full blur-xl"></div>
-              <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-1">Total Arsip</p>
-              <h2 className="text-4xl font-bold text-white">{statTotal} <span className="text-sm font-normal text-slate-500">dokumen</span></h2>
+        {/* ========================================================================= */}
+        {/* MONITORING PANEL KARTU METRIK STATISTIK */}
+        {/* ========================================================================= */}
+        <div className="w-full max-w-7xl mx-auto px-4 py-6">
+          <div className="grid grid-cols-3 gap-2 md:gap-4 mb-6">
+            <div className="rounded-xl p-4 bg-gradient-to-b from-[#040d2b] to-[#020818] border border-cyan-900/30 shadow relative">
+              <p className="text-slate-500 text-[10px] uppercase font-bold tracking-wider mb-1">Total</p>
+              <h2 className="text-2xl font-bold text-white font-mono">{hitungTotal}</h2>
             </div>
-            <div className="rounded-xl p-6 bg-gradient-to-br from-[#040d2b] to-[#0a1536] border border-green-900/30 shadow-lg relative overflow-hidden">
-              <div className="absolute -right-4 -top-4 w-24 h-24 bg-green-500/10 rounded-full blur-xl"></div>
-              <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-1">Telah Finalisasi</p>
-              <h2 className="text-4xl font-bold text-green-400">{statFinal} <span className="text-sm font-normal text-slate-500">selesai</span></h2>
+            <div className="rounded-xl p-4 bg-gradient-to-b from-[#040d2b] to-[#020818] border border-green-900/20 shadow relative">
+              <p className="text-green-500/70 text-[10px] uppercase font-bold tracking-wider mb-1">Final</p>
+              <h2 className="text-2xl font-bold text-green-400 font-mono">{hitungFinal}</h2>
             </div>
-            <div className="rounded-xl p-6 bg-gradient-to-br from-[#040d2b] to-[#0a1536] border border-orange-900/30 shadow-lg relative overflow-hidden">
-              <div className="absolute -right-4 -top-4 w-24 h-24 bg-orange-500/10 rounded-full blur-xl"></div>
-              <p className="text-slate-400 text-sm font-semibold uppercase tracking-wider mb-1">Draft / Review</p>
-              <h2 className="text-4xl font-bold text-orange-400">{statDraft} <span className="text-sm font-normal text-slate-500">tertunda</span></h2>
+            <div className="rounded-xl p-4 bg-gradient-to-b from-[#040d2b] to-[#020818] border border-orange-900/20 shadow relative">
+              <p className="text-orange-500/70 text-[10px] uppercase font-bold tracking-wider mb-1">Draft</p>
+              <h2 className="text-2xl font-bold text-orange-400 font-mono">{hitungDraft}</h2>
             </div>
           </div>
 
-          {/* ========================================== */}
-          {/* KONTROL PENCARIAN & FILTER */}
-          {/* ========================================== */}
-          <div className="flex flex-col md:flex-row gap-4 mb-8 bg-[#040d2b]/40 p-4 rounded-xl border border-cyan-900/30 backdrop-blur-md">
+          {/* ========================================================================= */}
+          {/* SEARCH DAN FILTER INPUT - DESIGN FIT TO SCREEN */}
+          {/* ========================================================================= */}
+          <div className="flex flex-col sm:flex-row gap-2 mb-6 bg-[#040d2b]/30 p-3 rounded-xl border border-cyan-900/20 backdrop-blur-md">
             <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <svg className="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </div>
               <input 
                 type="text" 
-                placeholder="Cari berdasarkan judul atau pimpinan rapat..." 
+                placeholder="Cari judul / pimpinan..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-11 pr-4 py-3 bg-[#0a1536] border border-cyan-900/50 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors text-sm"
+                className="w-full pl-9 pr-4 py-2.5 bg-[#0a1536] border border-cyan-900/40 rounded-lg text-slate-200 placeholder-slate-600 focus:outline-none focus:border-cyan-500 transition-colors text-xs"
               />
             </div>
-            <div className="w-full md:w-64">
+            <div className="w-full sm:w-44">
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-3 bg-[#0a1536] border border-cyan-900/50 rounded-lg text-slate-200 focus:outline-none focus:border-cyan-500 transition-colors text-sm appearance-none"
+                className="w-full px-3 py-2.5 bg-[#0a1536] border border-cyan-900/40 rounded-lg text-slate-200 focus:outline-none focus:border-cyan-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="all">Semua Status</option>
                 <option value="final">✅ Finalisasi</option>
-                <option value="review">👁️ Menunggu Review</option>
+                <option value="review">👁️ Review</option>
                 <option value="draft">📝 Draft</option>
               </select>
             </div>
           </div>
 
-          {/* ========================================== */}
-          {/* GRID KONTEN UTAMA */}
-          {/* ========================================== */}
+          {/* ========================================================================= */}
+          {/* LAYOUT GRID DENGAN SISTEM FIT-SCREEN MOBILE-FIRST */}
+          {/* ========================================================================= */}
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[1, 2, 3, 4, 5, 6].map(n => (
-                <div key={n} className="rounded-xl p-6 bg-[#040d2b]/40 border border-slate-800 animate-pulse h-48">
-                  <div className="w-1/3 h-4 bg-slate-800 rounded mb-4"></div>
-                  <div className="w-full h-6 bg-slate-700 rounded mb-2"></div>
-                  <div className="w-3/4 h-6 bg-slate-700 rounded mb-6"></div>
-                  <div className="w-1/2 h-4 bg-slate-800 rounded"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[1, 2, 3].map(n => (
+                <div key={n} className="rounded-xl p-5 bg-[#040d2b]/20 border border-slate-800/40 animate-pulse h-40">
+                  <div className="w-1/4 h-3 bg-slate-800 rounded mb-3"></div>
+                  <div className="w-full h-5 bg-slate-700 rounded mb-2"></div>
+                  <div className="w-2/3 h-5 bg-slate-700 rounded mb-4"></div>
                 </div>
               ))}
             </div>
           ) : paginatedData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-24 text-center bg-[#040d2b]/30 rounded-2xl border border-dashed border-cyan-900/50">
-              <svg className="w-16 h-16 text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-              <h3 className="text-xl font-semibold text-slate-400">Tidak Ada Data</h3>
-              <p className="text-slate-500 mt-2 text-sm">Sesuaikan filter pencarian atau tambahkan dokumen baru.</p>
+            <div className="flex flex-col items-center justify-center py-16 text-center bg-[#040d2b]/10 rounded-xl border border-dashed border-cyan-900/30">
+              <p className="text-slate-500 text-xs font-mono">Arsip data kosong atau tidak ditemukan.</p>
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                 {paginatedData.map((item) => (
-                  <div key={item.id} className="group flex flex-col justify-between rounded-xl p-6 bg-gradient-to-b from-[#040d2b]/80 to-[#020818] border border-cyan-900/40 hover:border-cyan-400/50 transition-all duration-300 hover:shadow-[0_0_25px_rgba(34,211,238,0.1)] relative overflow-hidden">
+                  <div key={item.id} className="group relative flex flex-col justify-between rounded-xl p-5 bg-gradient-to-b from-[#040d2b]/90 to-[#020818] border border-cyan-900/30 hover:border-cyan-500/40 transition-all duration-300 shadow-md">
                     
-                    {/* Efek Hover Garis Atas */}
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    
-                    <Link href={`/notulen/${item.id}`} className="block flex-grow cursor-pointer z-10">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-xs font-mono px-2.5 py-1 bg-[#0a1536] text-cyan-400 rounded-md border border-cyan-900/50">
-                          {item.tanggal || 'Tanpa Tanggal'}
+                    <div>
+                      {/* Badge tanggal dan status formal */}
+                      <div className="flex justify-between items-center mb-3">
+                        <span className="text-[10px] font-mono px-2 py-0.5 bg-[#0a1536] text-cyan-400 rounded border border-cyan-900/60">
+                          {item.tanggal || 'No Date'}
                         </span>
-                        <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-md border ${item.status === 'final' ? 'bg-green-500/10 text-green-400 border-green-500/30' : item.status === 'review' ? 'bg-orange-500/10 text-orange-400 border-orange-500/30' : 'bg-slate-800 text-slate-400 border-slate-600'}`}>
+                        <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${item.status === 'final' ? 'bg-green-500/10 text-green-400 border-green-500/20' : item.status === 'review' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
                           {item.status || 'DRAFT'}
                         </span>
                       </div>
                       
-                      <h3 className="text-lg font-bold text-white mb-3 leading-tight line-clamp-2 group-hover:text-cyan-300 transition-colors">
-                        {item.judul || 'Dokumen Tanpa Judul'}
+                      {/* Judul Notulen */}
+                      <h3 className="text-sm font-bold text-white mb-3 line-clamp-2 leading-snug group-hover:text-cyan-400 transition-colors">
+                        {item.judul || 'Judul Kosong'}
                       </h3>
                       
-                      <div className="space-y-2 mt-auto">
-                        <p className="text-sm text-slate-400 flex items-center gap-2 line-clamp-1">
-                          <svg className="w-4 h-4 text-cyan-500/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                          {item.tempat || 'Lokasi tidak diatur'}
+                      {/* Sekilas Informasi Lokasi dan Pimpinan */}
+                      <div className="space-y-1.5 mb-4">
+                        <p className="text-xs text-slate-400 flex items-center gap-1.5 line-clamp-1">
+                          <span className="text-cyan-500 font-bold">📍</span> {item.tempat || '-'}
                         </p>
-                        <p className="text-sm text-slate-400 flex items-center gap-2 line-clamp-1">
-                          <svg className="w-4 h-4 text-cyan-500/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                          {item.pimpinan_rapat || 'Anonim'}
+                        <p className="text-xs text-slate-400 flex items-center gap-1.5 line-clamp-1">
+                          <span className="text-cyan-500 font-bold">👤</span> {item.pimpinan_rapat || '-'}
                         </p>
                       </div>
-                    </Link>
+                    </div>
 
-                    {/* KONTROL ADMIN (Tampil Hanya Jika Gembok Terbuka) */}
-                    <div className={`mt-5 pt-4 border-t border-cyan-900/30 flex gap-3 justify-end transition-all duration-300 overflow-hidden ${isAdmin ? 'max-h-20 opacity-100' : 'max-h-0 opacity-0 border-transparent pb-0 mt-0 pt-0'}`}>
-                      <Link href={`/tambah?edit=${item.id}`} className="px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400 text-xs font-semibold hover:bg-blue-500/20 transition-all z-20 flex-1 text-center">
-                        Edit Data
-                      </Link>
-                      <button onClick={() => setDeleteId(item.id)} className="px-4 py-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs font-semibold hover:bg-red-500/20 transition-all z-20 flex-1">
-                        Hapus
-                      </button>
+                    {/* ========================================================================= */}
+                    {/* HUB KONTROL TOMBOL: LIHAT, CETAK, EDIT (TIDAK BOLEH DIKURANGI) */}
+                    {/* ========================================================================= */}
+                    <div className="pt-3 border-t border-cyan-900/20 flex flex-wrap gap-2 items-center justify-between">
+                      <div className="flex gap-1.5 flex-1">
+                        {/* 1. TOMBOL LIHAT (MENU UTAMA) */}
+                        <Link href={`/notulen/${item.id}`} className="px-2.5 py-1.5 bg-cyan-500/10 border border-cyan-500/30 rounded-md text-cyan-400 text-[11px] font-bold tracking-wide hover:bg-cyan-500/20 transition-all text-center flex-1">
+                          👁️ Lihat
+                        </Link>
+                        
+                        {/* 2. TOMBOL CETAK PDF (INTEGRASI PENYEMPURNAAN) */}
+                        <button 
+                          onClick={() => handleCetakPDF(item)}
+                          disabled={printingId === item.id}
+                          className="px-2.5 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md text-blue-400 text-[11px] font-bold tracking-wide hover:bg-blue-500/20 transition-all text-center flex-1 disabled:opacity-40"
+                        >
+                          {printingId === item.id ? '⏳...' : '🖨️ Cetak'}
+                        </button>
+                      </div>
+
+                      {/* 3. TOMBOL KONTROL ADMIN EDIT & HAPUS (MUNCUL OTOMATIS JIKA ADMIN AKTIF) */}
+                      {isAdmin && (
+                        <div className="w-full mt-2 flex gap-1.5 border-t border-dashed border-cyan-900/30 pt-2 animate-fade-in">
+                          <Link href={`/tambah?edit=${item.id}`} className="px-2 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-[10px] font-bold text-center flex-1 hover:bg-yellow-500/20 transition-all">
+                            📝 Edit
+                          </Link>
+                          <button onClick={() => setDeleteId(item.id)} className="px-2 py-1 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-[10px] font-bold text-center flex-1 hover:bg-red-500/20 transition-all">
+                            🗑️ Hapus
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                   </div>
                 ))}
               </div>
 
-              {/* ========================================== */}
-              {/* PAGINASI BAWAH */}
-              {/* ========================================== */}
+              {/* ========================================================================= */}
+              {/* COMPACT MOBILE-FIRST PAGINATION PANEL */}
+              {/* ========================================================================= */}
               {totalPages > 1 && (
-                <div className="flex justify-center items-center gap-2 border-t border-cyan-900/30 pt-8 pb-10">
+                <div className="flex justify-center items-center gap-1.5 border-t border-cyan-900/20 pt-4 pb-6">
                   <button 
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => prev - 1)}
-                    className="p-2 rounded-lg bg-[#040d2b] border border-cyan-900/50 text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-cyan-900/30 transition-all"
+                    className="p-1.5 rounded-md bg-[#040d2b] border border-cyan-900/60 text-cyan-400 disabled:opacity-20 transition-all"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
+                    ◀
                   </button>
                   
                   <div className="flex gap-1">
@@ -384,7 +524,7 @@ export default function DashboardAwal() {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${currentPage === page ? 'bg-cyan-500 text-slate-900 shadow-[0_0_10px_rgba(34,211,238,0.5)]' : 'bg-[#040d2b] border border-cyan-900/50 text-slate-400 hover:text-cyan-300 hover:border-cyan-500/50'}`}
+                        className={`w-7 h-7 text-xs font-bold rounded transition-all ${currentPage === page ? 'bg-cyan-500 text-slate-900 font-black' : 'bg-[#040d2b] text-slate-400 border border-cyan-900/40'}`}
                       >
                         {page}
                       </button>
@@ -394,9 +534,9 @@ export default function DashboardAwal() {
                   <button 
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => prev + 1)}
-                    className="p-2 rounded-lg bg-[#040d2b] border border-cyan-900/50 text-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-cyan-900/30 transition-all"
+                    className="p-1.5 rounded-md bg-[#040d2b] border border-cyan-900/60 text-cyan-400 disabled:opacity-20 transition-all"
                   >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>
+                    ▶
                   </button>
                 </div>
               )}
