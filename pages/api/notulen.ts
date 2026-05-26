@@ -22,38 +22,20 @@ const cleanObjectData = (obj: any): any => {
       // Hapus karakter unicode tersembunyi yang sering merusak query Google Sheets
       copy[key] = copy[key].replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
     } else if (typeof copy[key] === 'object') {
-      // MODIFIKASI AMAN: Jika properti adalah objek/array tingkat dalam, bersihkan secara rekursif.
-      // Namun, jika objek ini langsung ditujukan untuk cell baris Google Sheets, pastikan di-stringified 
-      // agar tidak menghasilkan "[object Object]" atau merusak payload API Google Sheets.
-      const deeplyCleaned = cleanObjectData(copy[key]);
-      if (Array.isArray(deeplyCleaned) || typeof deeplyCleaned === 'object') {
-        // Jangan stringify jika ini adalah root level array saat iterasi awal,
-        // Stringify dilakukan jika merupakan properti child dari data utama agar muat dalam 1 cell sheet.
-        copy[key] = JSON.stringify(deeplyCleaned);
-      } else {
-        copy[key] = deeplyCleaned;
-      }
+      copy[key] = cleanObjectData(copy[key]); 
     }
   }
   return copy;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser (FIXED: Menambahkan Allow-Headers)
+  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
-  }
-
-  // Pengaman otomatis jika body masuk dalam bentuk string mentah
-  let body = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch (_) {}
   }
 
   try {
@@ -83,11 +65,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // METHOD POST: SIMPAN DATA BARU
     // =========================================================================
     if (req.method === 'POST') {
+      const body = req.body;
       console.log('📥 Menerima Data Baru untuk Disimpan');
       
-      const cleanedBody = cleanObjectData(body);
-      const saved = await saveNotulen(cleanedBody);
+      let cleanedBody = cleanObjectData(body);
       
+      // =========================================================================
+      // TAMBAHAN SUPER CANGGIH: AUTO ID & ANTI-1899 DATE RECOVERY GUARD
+      // =========================================================================
+      if (!cleanedBody.id) {
+        cleanedBody.id = `NTLN-${Date.now()}`;
+      }
+      
+      // Jika tanggal tidak valid, kosong, atau default system bermasalah (1899), paksa isi tanggal hari ini
+      if (!cleanedBody.tanggal || cleanedBody.tanggal.includes('1899') || cleanedBody.tanggal === '') {
+        const tglSekarang = new Date();
+        const yyyy = tglSekarang.getFullYear();
+        const mm = String(tglSekarang.getMonth() + 1).padStart(2, '0');
+        const dd = String(tglSekarang.getDate()).padStart(2, '0');
+        cleanedBody.tanggal = `${yyyy}-${mm}-${dd}`;
+      }
+
+      const saved = await saveNotulen(cleanedBody);
       return res.status(201).json(saved || cleanedBody);
     }
 
@@ -95,6 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // METHOD PUT: UPDATE DATA NOTULEN
     // =========================================================================
     if (req.method === 'PUT') {
+      const body = req.body;
       if (!body || !body.id) {
         return res.status(400).json({ error: 'ID wajib diisi untuk melakukan pembaruan' });
       }
