@@ -24,7 +24,6 @@ export default function TambahNotulen() {
   const router = useRouter();
   const { edit } = router.query;
   
-  // PERBAIKAN 1: Pastikan edit ID selalu berupa string tunggal (mencegah error array router Next.js)
   const editId = Array.isArray(edit) ? edit[0] : edit;
   const isEdit = !!editId;
 
@@ -46,7 +45,6 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load data if editing
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen?id=${editId}`)
@@ -60,14 +58,13 @@ export default function TambahNotulen() {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 4500); // Diperlama sedikit agar pesan error terbaca
+    setTimeout(() => setToast(''), 4500);
   };
 
   const setField = (key: keyof FormData, val: string) => {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
-  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -110,7 +107,6 @@ export default function TambahNotulen() {
     setAiStep('🎙️ Mengonversi audio ke teks...');
 
     try {
-      // Convert to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -118,7 +114,6 @@ export default function TambahNotulen() {
         reader.readAsDataURL(blob);
       });
 
-      // Transcribe
       const transcribeRes = await fetch('/api/ai?action=transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,7 +122,6 @@ export default function TambahNotulen() {
       const { transcript } = await transcribeRes.json();
       setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
 
-      // Process to formal notulen
       await processTranscript(transcript);
     } catch (err: any) {
       showToast(`❌ ${err.message}`);
@@ -165,19 +159,16 @@ export default function TambahNotulen() {
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      // PERBAIKAN AI PARSING: Super Extractor yang mengabaikan teks di luar format JSON
-      const cleanAndParse = (str: string) => {
+      // PERBAIKAN MUTLAK 3: Guard anti error replace pada respon AI
+      const cleanAndParse = (str: any) => {
+        if (!str || typeof str !== 'string') return null;
         try {
-          // Cari pola objek JSON secara eksplisit di dalam string balasan AI
           const jsonMatch = str.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
-          }
-          // Fallback parsing klasik jika regex gagal
+          if (jsonMatch) return JSON.parse(jsonMatch[0]);
           const cleanStr = str.replace(/```json/gi, '').replace(/```/gi, '').trim();
           return JSON.parse(cleanStr);
         } catch (e) {
-          console.warn("Gagal parse JSON dari AI, beralih ke raw text:", e);
+          console.warn("Gagal parse JSON AI:", e);
           return null;
         }
       };
@@ -232,7 +223,6 @@ export default function TambahNotulen() {
     }
   };
 
-  // PERBAIKAN 2: FUNGSI SIMPAN YANG JAUH LEBIH KUAT DAN INFORMATIF
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan tanggal wajib diisi');
@@ -241,22 +231,21 @@ export default function TambahNotulen() {
 
     setSaving(true);
     try {
-      // Memastikan sama sekali tidak ada undefined, force casting ke string
       const payload = {
-        judul: form.judul ? String(form.judul) : '',
-        tanggal: form.tanggal ? String(form.tanggal) : '',
-        waktu_mulai: form.waktu_mulai ? String(form.waktu_mulai) : '',
-        waktu_selesai: form.waktu_selesai ? String(form.waktu_selesai) : '',
-        tempat: form.tempat ? String(form.tempat) : '',
-        pimpinan_rapat: form.pimpinan_rapat ? String(form.pimpinan_rapat) : '',
-        notulis: form.notulis ? String(form.notulis) : '',
-        peserta: form.peserta ? String(form.peserta) : '',
-        agenda: form.agenda ? String(form.agenda) : '',
-        isi_notulen: form.isi_notulen ? String(form.isi_notulen) : '',
-        kesimpulan: form.kesimpulan ? String(form.kesimpulan) : '',
-        tindak_lanjut: form.tindak_lanjut ? String(form.tindak_lanjut) : '',
+        judul: String(form.judul || ''),
+        tanggal: String(form.tanggal || ''),
+        waktu_mulai: String(form.waktu_mulai || ''),
+        waktu_selesai: String(form.waktu_selesai || ''),
+        tempat: String(form.tempat || ''),
+        pimpinan_rapat: String(form.pimpinan_rapat || ''),
+        notulis: String(form.notulis || ''),
+        peserta: String(form.peserta || ''),
+        agenda: String(form.agenda || ''),
+        isi_notulen: String(form.isi_notulen || ''),
+        kesimpulan: String(form.kesimpulan || ''),
+        tindak_lanjut: String(form.tindak_lanjut || ''),
         status: statusOverride || form.status || 'draft',
-        raw_transcript: form.raw_transcript ? String(form.raw_transcript) : ''
+        raw_transcript: String(form.raw_transcript || '')
       };
 
       const method = isEdit ? 'PUT' : 'POST';
@@ -271,21 +260,17 @@ export default function TambahNotulen() {
         body: JSON.stringify(body)
       });
 
-      // Menangkap pesan error ASLI dari backend/Sheets jika gagal
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.details || errData.error || `HTTP Error ${res.status}`);
       }
 
       const saved = await res.json();
-
       showToast('✅ Notulen berhasil disimpan!');
-      // Gunakan saved.id jika baru buat, atau editId jika mode edit
       setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1200);
       
     } catch (err: any) {
       console.error("DEBUG SIMPAN:", err);
-      // Menampilkan alasan gagal yang sebenarnya ke layar
       showToast(`❌ Gagal: ${err.message}`);
     } finally {
       setSaving(false);
@@ -301,7 +286,6 @@ export default function TambahNotulen() {
       </Head>
 
       <div className="min-h-screen grid-bg" style={{ background: '#020818' }}>
-        {/* Toast */}
         {toast && (
           <div className="fixed top-4 right-4 z-50 px-5 py-3 rounded-lg text-sm font-medium animate-slide-up"
             style={{ background: '#061240', border: '1px solid #22d3ee40', color: '#e2e8f0', boxShadow: '0 0 20px #22d3ee20' }}>
@@ -309,7 +293,6 @@ export default function TambahNotulen() {
           </div>
         )}
 
-        {/* Nav */}
         <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur" style={{ background: '#040d2b95' }}>
           <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -338,7 +321,6 @@ export default function TambahNotulen() {
         </nav>
 
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-          {/* Section: Info Rapat */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-cyan-400 inline-block" />
@@ -387,7 +369,6 @@ export default function TambahNotulen() {
             </div>
           </div>
 
-          {/* Section: Voice Recording */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-red-400 inline-block" />
@@ -444,7 +425,6 @@ export default function TambahNotulen() {
             </div>
           </div>
 
-          {/* Section: Isi Notulen */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-green-400 inline-block" />
