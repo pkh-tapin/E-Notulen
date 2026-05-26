@@ -1,21 +1,26 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../../lib/sheets';
 
+// CANGGIH: Kapasitas besar agar teks AI super panjang tidak terkena Error 413 (Payload Too Large)
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '10mb', // Optimal untuk Vercel Serverless agar tidak memicu error payload
+      sizeLimit: '50mb', 
     },
   },
 };
 
+// FILTER BAJA: Membersihkan nilai kosong dan menghapus karakter aneh yang membuat Google Sheets Error 500
 const cleanObjectData = (obj: any): any => {
   if (!obj || typeof obj !== 'object') return obj;
   const copy = Array.isArray(obj) ? [...obj] : { ...obj };
   
   for (const key in copy) {
     if (copy[key] === undefined || copy[key] === null) {
-      copy[key] = ''; 
+      copy[key] = ''; // Ganti semua yang kosong dengan string aman
+    } else if (typeof copy[key] === 'string') {
+      // Hapus karakter unicode tersembunyi yang sering merusak query Google Sheets
+      copy[key] = copy[key].replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
     } else if (typeof copy[key] === 'object') {
       copy[key] = cleanObjectData(copy[key]); 
     }
@@ -24,50 +29,53 @@ const cleanObjectData = (obj: any): any => {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
   try {
+    // =========================================================================
+    // METHOD GET: AMBIL DATA
+    // =========================================================================
     if (req.method === 'GET') {
-      const { tanggal, id } = req.query;
+      const { id, date } = req.query;
 
       if (id) {
-        const all = await getAllNotulen();
-        const found = all.find((n: any) => String(n.id) === String(id));
-        if (!found) return res.status(404).json({ error: 'Notulen tidak ditemukan' });
-        return res.status(200).json(found);
+        const data = await getAllNotulen();
+        const item = data.find((d: any) => String(d.id) === String(id));
+        if (!item) return res.status(404).json({ error: 'Data notulen tidak ditemukan' });
+        return res.status(200).json(item);
       }
 
-      if (tanggal) {
-        const data = await getNotulenByDate(tanggal as string);
+      if (date) {
+        const data = await getNotulenByDate(date as string);
         return res.status(200).json(data);
       }
 
-      const data = await getAllNotulen();
-      const sorted = data.sort((a: any, b: any) => {
-        const dateA = new Date(a.tanggal || 0).getTime();
-        const dateB = new Date(b.tanggal || 0).getTime();
-        return dateB - dateA;
-      });
-      return res.status(200).json(sorted);
+      const allData = await getAllNotulen();
+      return res.status(200).json(allData);
     }
 
+    // =========================================================================
+    // METHOD POST: SIMPAN DATA BARU
+    // =========================================================================
     if (req.method === 'POST') {
       const body = req.body;
-      if (!body || !body.judul || !body.tanggal) {
-        return res.status(400).json({ error: 'Judul dan tanggal wajib diisi' });
-      }
-
+      console.log('📥 Menerima Data Baru untuk Disimpan');
+      
       const cleanedBody = cleanObjectData(body);
       const saved = await saveNotulen(cleanedBody);
+      
       return res.status(201).json(saved || cleanedBody);
     }
 
+    // =========================================================================
+    // METHOD PUT: UPDATE DATA NOTULEN
+    // =========================================================================
     if (req.method === 'PUT') {
       const body = req.body;
       if (!body || !body.id) {
@@ -76,18 +84,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       console.log(`🔄 Mengupdate Data Notulen ID: ${body.id}`);
       const cleanedBody = cleanObjectData(body);
-      
-      // CATATAN KRITIS: Pastikan fungsi saveNotulen di lib/sheets mampu mendeteksi 'id' 
-      // dan melakukan operasi UPDATE baris, bukan ADD ROW.
       const saved = await saveNotulen(cleanedBody);
       
       return res.status(200).json(saved || cleanedBody);
     }
 
+    // =========================================================================
+    // METHOD DELETE: HAPUS NOTULEN
+    // =========================================================================
     if (req.method === 'DELETE') {
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
 
+      console.log(`🗑️ Menghapus Notulen ID: ${id}`);
       const ok = await deleteNotulen(id as string);
       return res.status(200).json({ success: ok });
     }
@@ -96,10 +105,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   } catch (error: any) {
     console.error('❌ [CRITICAL SYSTEM ERROR]:', error);
-    // Mengembalikan JSON terstruktur agar Vercel tidak melempar 500 HTML mentah
     return res.status(500).json({ 
-      error: 'Gagal memproses data ke database (Google Sheets)', 
-      details: error.message || error.toString() 
+      error: 'Gagal memproses data ke Spreadsheet',
+      details: error.message || 'Terjadi kesalahan sistem internal'
     });
   }
 }
