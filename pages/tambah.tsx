@@ -4,15 +4,26 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 interface FormData {
-  judul: string; tanggal: string; waktu_mulai: string; waktu_selesai: string;
-  tempat: string; pimpinan_rapat: string; notulis: string; peserta: string;
-  agenda: string; isi_notulen: string; kesimpulan: string; tindak_lanjut: string;
-  status: string; raw_transcript: string;
+  judul: string;
+  tanggal: string;
+  waktu_mulai: string;
+  waktu_selesai: string;
+  tempat: string;
+  pimpinan_rapat: string;
+  notulis: string;
+  peserta: string;
+  agenda: string;
+  isi_notulen: string;
+  kesimpulan: string;
+  tindak_lanjut: string;
+  status: string;
+  raw_transcript: string;
 }
 
 export default function TambahNotulen() {
   const router = useRouter();
   const { edit } = router.query;
+  
   const editId = Array.isArray(edit) ? edit[0] : edit;
   const isEdit = !!editId;
 
@@ -28,7 +39,7 @@ export default function TambahNotulen() {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiStep, setAiStep] = useState('');
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState<{msg: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [toast, setToast] = useState('');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -36,18 +47,23 @@ export default function TambahNotulen() {
 
   useEffect(() => {
     if (editId) {
-      fetch(`/api/notulen?id=${editId}`).then(r => r.json())
-        .then(d => { if (d && !d.error) setForm(d); })
-        .catch(() => showToast('❌ Gagal memuat data', 'error'));
+      fetch(`/api/notulen?id=${editId}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d && !d.error) setForm(d);
+        })
+        .catch(console.error);
     }
   }, [editId]);
 
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000); 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 4500); 
   };
 
-  const setField = (key: keyof FormData, val: string) => setForm(prev => ({ ...prev, [key]: val }));
+  const setField = (key: keyof FormData, val: string) => {
+    setForm(prev => ({ ...prev, [key]: val }));
+  };
 
   const startRecording = async () => {
     try {
@@ -55,7 +71,10 @@ export default function TambahNotulen() {
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       chunksRef.current = [];
 
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.ondataavailable = e => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
@@ -66,8 +85,13 @@ export default function TambahNotulen() {
       mediaRecorderRef.current = mr;
       setRecording(true);
       setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-    } catch (err) { showToast('❌ Izin Mikrofon Ditolak', 'error'); }
+
+      timerRef.current = setInterval(() => {
+        setRecordingTime(t => t + 1);
+      }, 1000);
+    } catch (err) {
+      showToast('❌ Gagal mengakses mikrofon. Pastikan izin diberikan.');
+    }
   };
 
   const stopRecording = () => {
@@ -79,78 +103,113 @@ export default function TambahNotulen() {
   };
 
   const processAudio = async (blob: Blob) => {
-    setAiLoading(true); setAiStep('🎙️ Transkripsi Audio...');
+    setAiLoading(true);
+    setAiStep('🎙️ Mengonversi audio ke teks...');
+
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject; reader.readAsDataURL(blob);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
       });
-      const res = await fetch('/api/ai?action=transcribe', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+
+      const transcribeRes = await fetch('/api/ai?action=transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioBase64: base64, mimeType: 'audio/webm' })
       });
-      if (!res.ok) throw new Error('Gagal transkrip');
-      const { transcript } = await res.json();
+      
+      const { transcript } = await transcribeRes.json();
       setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
       await processTranscript(transcript);
-    } catch (err: any) { showToast(`❌ ${err.message}`, 'error'); setAiLoading(false); setAiStep(''); }
+    } catch (err: any) {
+      showToast(`❌ ${err.message}`);
+      setAiLoading(false);
+      setAiStep('');
+    }
   };
 
-  // ====================================================================================
-  // 🧠 SUPER AI PARSER: Memperbaiki Format AI yang Terpotong / Kehilangan Kurung Kurawal
-  // ====================================================================================
+  // =========================================================================
+  // PERBAIKAN MESIN AI: Pengekstrak Lapis Baja (Anti Error Parsing)
+  // =========================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
-    if (!txt.trim()) return showToast('⚠️ Isi transcript (catatan mentah) terlebih dahulu', 'info');
+    if (!txt.trim()) {
+      showToast('⚠️ Isi transcript terlebih dahulu');
+      return;
+    }
 
-    setAiLoading(true); setAiStep('🤖 Memeras Kecerdasan AI...');
+    setAiLoading(true);
+    setAiStep('🤖 AI sedang merapikan notulen...');
+
     try {
       const res = await fetch('/api/ai?action=process', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: txt, agenda: form.agenda, tempat: form.tempat, tanggal: form.tanggal, pimpinan: form.pimpinan_rapat })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: txt,
+          agenda: form.agenda,
+          tempat: form.tempat,
+          tanggal: form.tanggal,
+          pimpinan: form.pimpinan_rapat
+        })
       });
       
-      let rawResult;
-      try { rawResult = await res.json(); } catch(e) { throw new Error('Server mengembalikan data hancur'); }
-      if (!res.ok) throw new Error(rawResult.error || 'Server Error');
-
-      let finalJudul = '', finalIsi = '', finalKesimpulan = '', finalTindakLanjut = '';
+      const rawResult = await res.json();
       
-      // Ambil string mentah dari AI
-      let cleanStr = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult);
-      cleanStr = cleanStr.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      let finalJudul = '';
+      let finalIsi = '';
+      let finalKesimpulan = '';
+      let finalTindakLanjut = '';
 
-      // AUTO-HEAL: Jika AI lupa memberikan { } (Seperti kasus di gambar Anda)
-      if (!cleanStr.startsWith('{') && cleanStr.includes('"judul_saran"')) {
+      // Ekstraktor Ekstrim: Memaksa mengambil data meskipun JSON dari Gemini rusak/kotor
+      let cleanStr = '';
+      if (typeof rawResult === 'string') {
+        cleanStr = rawResult.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      } else if (typeof rawResult === 'object') {
+        cleanStr = JSON.stringify(rawResult);
+      }
+
+      // =====================================================================
+      // KUNCI PERBAIKAN: AUTO-HEAL JSON YANG HILANG KURUNG KURAWALNYA
+      // Jika hasil AI terpotong dan tidak dimulai dengan {
+      if (!cleanStr.startsWith('{') && (cleanStr.includes('"judul_saran"') || cleanStr.includes('"judul"'))) {
         cleanStr = `{ ${cleanStr} }`;
       }
+      // =====================================================================
 
       try {
-        // Percobaan Parsing Normal setelah disembuhkan
-        const parsed = JSON.parse(cleanStr);
-        finalJudul = parsed.judul_saran || parsed.judul || '';
-        finalIsi = parsed.isi_notulen || parsed.isi || '';
-        finalKesimpulan = parsed.kesimpulan || '';
-        finalTindakLanjut = parsed.tindak_lanjut || parsed.tindaklanjut || '';
+        // Percobaan 1: Parsing Normal
+        const parsedData = JSON.parse(cleanStr);
+        finalJudul = parsedData.judul_saran || parsedData.judul || '';
+        finalIsi = parsedData.isi_notulen || parsedData.isi || '';
+        finalKesimpulan = parsedData.kesimpulan || '';
+        finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
       } catch (e1) {
-        // FALLBACK EKSTRIM: Regex Pencabut Data Otomatis
-        const extract = (keys: string[]) => {
-          for (let key of keys) {
-            const regex = new RegExp(`"?${key}"?\\s*:\\s*"?([\\s\\S]*?)"?(?:,\\s*"\\w+"\\s*:|\\s*})`, 'i');
-            const match = cleanStr.match(regex);
-            if (match && match[1]) return match[1].trim().replace(/\\n/g, '\n').replace(/\\"/g, '"');
-          }
-          return '';
+        // Percobaan 2: Jika gagal, gunakan Regex untuk mencabut teks secara paksa
+        console.warn("JSON kotor terdeteksi, mengaktifkan mode ekstraksi paksa...");
+        const getMatch = (key: string) => {
+          const regex = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|})`, 'i');
+          const match = cleanStr.match(regex);
+          return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
         };
-        finalJudul = extract(['judul_saran', 'judul']);
-        finalIsi = extract(['isi_notulen', 'isi']);
-        finalKesimpulan = extract(['kesimpulan']);
-        finalTindakLanjut = extract(['tindak_lanjut', 'tindaklanjut']);
-        if (!finalIsi) finalIsi = cleanStr; // Jika benar-benar hancur
+
+        finalJudul = getMatch('judul_saran') || getMatch('judul');
+        finalIsi = getMatch('isi_notulen') || getMatch('isi');
+        finalKesimpulan = getMatch('kesimpulan');
+        finalTindakLanjut = getMatch('tindak_lanjut') || getMatch('tindaklanjut');
+        
+        // Fallback terakhir jika hancur total
+        if (!finalIsi) finalIsi = cleanStr;
       }
 
-      const formatText = (text: string) => text ? String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+      // Pembersih karakter newline (\n literal) menjadi enter sungguhan
+      const formatText = (text: string) => {
+        if (!text) return '';
+        return String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      };
+
       setForm(prev => ({
         ...prev,
         judul: finalJudul ? formatText(finalJudul) : prev.judul,
@@ -158,165 +217,258 @@ export default function TambahNotulen() {
         kesimpulan: finalKesimpulan ? formatText(finalKesimpulan) : prev.kesimpulan,
         tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
       }));
-      showToast('✅ Boom! Notulen Rapi Tersusun.', 'success');
-    } catch (err: any) { showToast(`❌ Error: ${err.message}`, 'error'); } 
-    finally { setAiLoading(false); setAiStep(''); }
+
+      showToast('✅ Notulen berhasil digenerate oleh AI!');
+    } catch (err: any) {
+      showToast(`❌ ${err.message}`);
+    } finally {
+      setAiLoading(false);
+      setAiStep('');
+    }
   };
 
+  const triggerDownload = (notulenData: FormData) => {
+    showToast('⬇️ Data tersimpan. Silakan klik Cetak PDF di halaman Detail.');
+  };
+
+  // =========================================================================
+  // PERBAIKAN SIMPAN DATA: Mencegah Error 500 karena Payload
+  // =========================================================================
   const handleSave = async (statusOverride?: string) => {
-    if (!form.judul || !form.tanggal) return showToast('⚠️ Judul dan Tanggal Rapat wajib diisi!', 'error');
+    if (!form.judul || !form.tanggal) {
+      showToast('⚠️ Judul dan tanggal wajib diisi');
+      return;
+    }
+
     setSaving(true);
     const finalStatus = statusOverride || form.status || 'draft';
+
     try {
-      const payload = { ...form, status: finalStatus, raw_transcript: String(form.raw_transcript || '') };
+      // Memastikan semua data bertipe String yang aman
+      const payload = {
+        judul: String(form.judul || ''),
+        tanggal: String(form.tanggal || ''),
+        waktu_mulai: String(form.waktu_mulai || ''),
+        waktu_selesai: String(form.waktu_selesai || ''),
+        tempat: String(form.tempat || ''),
+        pimpinan_rapat: String(form.pimpinan_rapat || ''),
+        notulis: String(form.notulis || ''),
+        peserta: String(form.peserta || ''),
+        agenda: String(form.agenda || ''),
+        isi_notulen: String(form.isi_notulen || ''),
+        kesimpulan: String(form.kesimpulan || ''),
+        tindak_lanjut: String(form.tindak_lanjut || ''),
+        status: finalStatus,
+        raw_transcript: String(form.raw_transcript || '')
+      };
+
       const method = isEdit ? 'PUT' : 'POST';
       const body = isEdit ? { ...payload, id: editId } : payload;
-      
+
       const res = await fetch('/api/notulen', {
-        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        method,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json' 
+        },
+        body: JSON.stringify(body)
       });
 
-      if (!res.ok) throw new Error(`Gagal menyimpan (Error ${res.status})`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.details || errData.error || `HTTP Error ${res.status}`);
+      }
+
       const saved = await res.json();
+      showToast('✅ Data Tersimpan Ke Database!');
+
+      if (finalStatus === 'final') {
+        triggerDownload(payload);
+      }
       
-      showToast('✅ Tersimpan Cepat ke Database!', 'success');
-      router.push(`/notulen/${saved.id || editId}`);
-    } catch (err: any) { showToast(`❌ ${err.message}`, 'error'); setSaving(false); }
+      setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1500);
+      
+    } catch (err: any) {
+      console.error("DEBUG SIMPAN:", err);
+      showToast(`❌ Gagal: ${err.message}`);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   return (
-    <div className="min-h-screen bg-[#020617] overflow-x-hidden w-full text-slate-200 pb-20 md:pb-8 selection:bg-cyan-500/30">
+    <>
       <Head>
-        <title>{isEdit ? 'Edit' : 'Tambah'} Notulen AI — E-Laporan PKH Tapin</title>
+        <title>{isEdit ? 'Edit' : 'Tambah'} Notulen — NotulenAI</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      {/* TOAST SUPER CEPAT & HALUS */}
-      {toast && (
-        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-full text-sm font-bold shadow-2xl transition-all duration-300 animate-bounce flex items-center gap-3 backdrop-blur-xl border
-          ${toast.type === 'error' ? 'bg-red-950/90 border-red-500/50 text-red-200' : toast.type === 'success' ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200' : 'bg-[#061240]/90 border-cyan-500/40 text-cyan-100'}
-        `}>
-          {toast.msg}
-        </div>
-      )}
-
-      {/* HEADER MOBILE & DESKTOP */}
-      <nav className="border-b border-cyan-900/40 sticky top-0 z-40 backdrop-blur-2xl bg-[#020617]/90 w-full">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => router.push('/')} className="p-2 rounded-full bg-slate-800 text-slate-300 hover:bg-cyan-900 transition-all">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/></svg>
-            </button>
-            <h1 className="text-lg md:text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">
-              {isEdit ? 'EDIT NOTULEN' : 'NOTULEN BARU'}
-            </h1>
-          </div>
-          <button onClick={() => handleSave('final')} disabled={saving}
-            className="hidden md:flex px-5 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-cyan-600 to-blue-600 hover:scale-105 transition-transform shadow-[0_0_15px_rgba(34,211,238,0.4)]">
-            {saving ? 'Proses...' : 'Simpan Notulen'}
-          </button>
-        </div>
-      </nav>
-
-      <div className="max-w-6xl mx-auto px-4 mt-6 space-y-6">
+      <div className="min-h-screen bg-[#020818] overflow-x-hidden w-full text-slate-200">
         
-        {/* PANEL KIRI: INFO & REKAMAN (GRID) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {toast && (
+          <div className="fixed top-4 right-4 z-50 px-5 py-3 rounded-lg text-sm font-medium animate-slide-up backdrop-blur-md"
+            style={{ background: 'rgba(6, 18, 64, 0.9)', border: '1px solid rgba(34, 211, 238, 0.4)', boxShadow: '0 0 20px rgba(34, 211, 238, 0.2)' }}>
+            {toast}
+          </div>
+        )}
+
+        <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur-xl bg-[#040d2b]/80 w-full">
+          <div className="w-full max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3 md:gap-4">
+              <Link href="/" className="text-slate-500 hover:text-slate-300 transition-colors">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5">
+                  <path d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </Link>
+              <span className="font-display text-base md:text-lg font-semibold tracking-wider text-cyan-300 truncate">
+                {isEdit ? 'EDIT' : 'TAMBAH'} <span className="text-white">NOTULEN</span>
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => handleSave('draft')} disabled={saving}
+                className="hidden md:block px-4 py-2 rounded text-sm font-medium transition-all bg-gray-800 border border-gray-600 text-gray-300 hover:bg-gray-700">
+                {saving ? 'Menyimpan...' : 'Simpan Draft'}
+              </button>
+              <button onClick={() => handleSave('final')} disabled={saving}
+                className="px-4 py-2 rounded text-sm font-medium transition-all bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30">
+                {saving ? 'Proses...' : '✓ Finalisasi'}
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <div className="w-full max-w-5xl mx-auto px-4 py-6 md:py-8 space-y-6">
           
-          <div className="rounded-2xl p-5 md:p-7 bg-slate-900/40 border border-slate-800 backdrop-blur-lg">
-            <h2 className="text-cyan-400 font-bold mb-5 flex items-center gap-2"><span className="w-2 h-6 bg-cyan-500 rounded-full" /> Data Utama</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Judul Rapat *</label>
-                <input type="text" value={form.judul} onChange={e => setField('judul', e.target.value)} placeholder="Contoh: Rapat Koordinasi..."
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none transition-all font-semibold" />
+          <div className="rounded-xl p-5 md:p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-cyan-900/50 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
+            <h2 className="text-base md:text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
+              <span className="w-1 h-5 rounded bg-cyan-400 inline-block" />
+              INFORMASI RAPAT
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Judul Rapat *</label>
+                <input type="text" value={form.judul} onChange={e => setField('judul', e.target.value)}
+                  placeholder="Contoh: Rapat Koordinasi Program Kerja 2025"
+                  className="w-full px-4 py-2.5 rounded text-sm text-slate-200 placeholder-slate-600 outline-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Tanggal</label>
-                  <input type="date" value={form.tanggal} onChange={e => setField('tanggal', e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none" />
+              {[
+                { key: 'tanggal', label: 'Tanggal Rapat *', type: 'date' },
+                { key: 'waktu_mulai', label: 'Waktu Mulai', type: 'time' },
+                { key: 'waktu_selesai', label: 'Waktu Selesai', type: 'time' },
+                { key: 'tempat', label: 'Tempat/Lokasi', type: 'text', placeholder: 'Contoh: Ruang Rapat' },
+                { key: 'pimpinan_rapat', label: 'Pimpinan Rapat', type: 'text', placeholder: 'Nama pimpinan' },
+                { key: 'notulis', label: 'Notulis', type: 'text', placeholder: 'Nama notulis' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">{f.label}</label>
+                  <input type={f.type}
+                    value={(form as any)[f.key]}
+                    onChange={e => setField(f.key as keyof FormData, e.target.value)}
+                    placeholder={(f as any).placeholder || ''}
+                    className="w-full px-4 py-2.5 rounded text-sm text-slate-200 placeholder-slate-600 outline-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
                 </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Lokasi</label>
-                  <input type="text" value={form.tempat} onChange={e => setField('tempat', e.target.value)} placeholder="Lokasi"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none" />
-                </div>
+              ))}
+              <div className="md:col-span-2">
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Peserta Rapat</label>
+                <textarea value={form.peserta} onChange={e => setField('peserta', e.target.value)}
+                  placeholder="Daftar nama peserta..."
+                  rows={2} className="w-full px-4 py-2.5 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
               </div>
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Pimpinan & Notulis</label>
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="text" value={form.pimpinan_rapat} onChange={e => setField('pimpinan_rapat', e.target.value)} placeholder="Pimpinan"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none" />
-                  <input type="text" value={form.notulis} onChange={e => setField('notulis', e.target.value)} placeholder="Notulis"
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-500 outline-none" />
-                </div>
+              <div className="md:col-span-2">
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Agenda Rapat</label>
+                <textarea value={form.agenda} onChange={e => setField('agenda', e.target.value)}
+                  placeholder="Agenda yang dibahas..."
+                  rows={2} className="w-full px-4 py-2.5 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl p-5 md:p-7 bg-indigo-900/10 border border-indigo-900/50 backdrop-blur-lg relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl"></div>
-             <h2 className="text-indigo-400 font-bold mb-5 flex items-center gap-2"><span className="w-2 h-6 bg-indigo-500 rounded-full" /> Kecerdasan Buatan (AI)</h2>
-             
-             {!recording ? (
-                <button onClick={startRecording} disabled={aiLoading} className="w-full py-4 mb-4 rounded-xl font-bold bg-rose-500/10 border border-rose-500/30 text-rose-400 flex justify-center items-center gap-2 hover:bg-rose-500/20">
-                  <div className="w-3 h-3 bg-rose-500 rounded-full animate-pulse" /> Rekam Suara Langsung
+          <div className="rounded-xl p-5 md:p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-red-900/30 shadow-[0_0_15px_rgba(239,68,68,0.03)]">
+            <h2 className="text-base md:text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
+              <span className="w-1 h-5 rounded bg-red-500 inline-block" />
+              REKAM SUARA RAPAT
+            </h2>
+            
+            <div className="flex flex-wrap items-center gap-3 md:gap-4 mb-5">
+              {!recording ? (
+                <button onClick={startRecording} disabled={aiLoading}
+                  className="flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-3 rounded-lg font-medium transition-all bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20">
+                  <div className="w-3 h-3 rounded-full bg-red-500" />
+                  Mulai Rekam
                 </button>
               ) : (
-                <button onClick={stopRecording} className="w-full py-4 mb-4 rounded-xl font-bold bg-rose-600 text-white flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(225,29,72,0.5)]">
-                  <div className="w-3 h-3 bg-white rounded-sm" /> Berhenti ({formatTime(recordingTime)})
+                <button onClick={stopRecording}
+                  className="flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-3 rounded-lg font-medium animate-pulse bg-red-500/20 border border-red-500 text-red-400">
+                  <div className="w-3 h-3 rounded bg-red-500" />
+                  Stop • {formatTime(recordingTime)}
                 </button>
               )}
 
-              <textarea value={form.raw_transcript} onChange={e => setField('raw_transcript', e.target.value)}
-                  placeholder="Ketik catatan rapat manual di sini, atau rekam suara di atas..."
-                  className="w-full h-32 px-4 py-3 rounded-xl bg-slate-950/80 border border-indigo-800/50 focus:border-indigo-400 outline-none resize-none mb-4 text-sm font-mono text-indigo-100" />
-              
               <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript}
-                className="w-full py-4 rounded-xl font-bold bg-gradient-to-r from-indigo-600 to-cyan-600 text-white hover:scale-[1.01] transition-transform disabled:opacity-50 flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(79,70,229,0.4)]">
-                {aiLoading ? ( <><div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Sedang Memproses...</> ) : '✨ Rapikan dengan AI'}
+                className="flex-1 md:flex-none flex justify-center items-center gap-2 px-5 py-3 rounded-lg font-medium transition-all disabled:opacity-40 bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20">
+                {aiLoading ? (
+                  <div className="w-4 h-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                ) : (
+                  <>✨ Proses AI</>
+                )}
               </button>
-              {aiStep && <p className="text-center text-xs text-indigo-300 mt-3 font-semibold animate-pulse">{aiStep}</p>}
+            </div>
+
+            {aiStep && (
+              <div className="mb-4 px-4 py-3 rounded text-sm text-cyan-300 font-mono bg-cyan-500/10 border border-cyan-500/20">
+                {aiStep}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">
+                Transcript / Catatan
+              </label>
+              <textarea value={form.raw_transcript} onChange={e => setField('raw_transcript', e.target.value)}
+                placeholder="Ketik catatan atau hasil rekaman akan muncul di sini..."
+                rows={5} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none font-mono bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
+            </div>
           </div>
 
-        </div>
-
-        {/* PANEL HASIL NOTULEN */}
-        <div className="rounded-2xl p-5 md:p-7 bg-emerald-900/10 border border-emerald-900/40 backdrop-blur-lg">
-           <h2 className="text-emerald-400 font-bold mb-5 flex items-center gap-2"><span className="w-2 h-6 bg-emerald-500 rounded-full" /> Hasil Notulen Rapi</h2>
-           <div className="space-y-5">
+          <div className="rounded-xl p-5 md:p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-green-900/30 shadow-[0_0_15px_rgba(34,197,94,0.03)]">
+            <h2 className="text-base md:text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
+              <span className="w-1 h-5 rounded bg-green-400 inline-block" />
+              ISI NOTULEN
+            </h2>
+            <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Isi Notulen Lengkap</label>
-                <textarea value={form.isi_notulen} onChange={e => setField('isi_notulen', e.target.value)} rows={8}
-                  className="w-full px-5 py-4 rounded-xl bg-slate-950 border border-emerald-800/50 focus:border-emerald-500 outline-none text-base leading-relaxed" />
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Isi Notulen Lengkap</label>
+                <textarea value={form.isi_notulen} onChange={e => setField('isi_notulen', e.target.value)}
+                  rows={8} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors leading-relaxed whitespace-pre-wrap" />
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Kesimpulan</label>
-                  <textarea value={form.kesimpulan} onChange={e => setField('kesimpulan', e.target.value)} rows={3}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-emerald-800/50 focus:border-emerald-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1 block">Tindak Lanjut</label>
-                  <textarea value={form.tindak_lanjut} onChange={e => setField('tindak_lanjut', e.target.value)} rows={3}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-emerald-800/50 focus:border-emerald-500 outline-none" />
-                </div>
+              <div>
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Kesimpulan</label>
+                <textarea value={form.kesimpulan} onChange={e => setField('kesimpulan', e.target.value)}
+                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors whitespace-pre-wrap" />
               </div>
-           </div>
+              <div>
+                <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Tindak Lanjut</label>
+                <textarea value={form.tindak_lanjut} onChange={e => setField('tindak_lanjut', e.target.value)}
+                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none font-mono bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors whitespace-pre-wrap" />
+              </div>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 gap-4">
+                <select value={form.status} onChange={e => setField('status', e.target.value)}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded text-sm outline-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 text-slate-200">
+                  <option value="draft">📝 Draft</option>
+                  <option value="review">👁️ Review</option>
+                  <option value="final">✅ Final</option>
+                </select>
+                <button onClick={() => handleSave()} disabled={saving}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded text-sm font-medium transition-all bg-cyan-500/20 border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/30">
+                  {saving ? 'Menyimpan...' : '💾 Simpan Data'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-
       </div>
-
-      {/* FLOATING ACTION BUTTON (MOBILE ONLY) */}
-      <div className="fixed bottom-0 left-0 w-full p-4 bg-gradient-to-t from-[#020617] to-transparent md:hidden z-50">
-         <button onClick={() => handleSave('final')} disabled={saving}
-            className="w-full py-4 rounded-2xl font-bold text-lg bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-[0_0_20px_rgba(34,211,238,0.4)] flex justify-center items-center gap-2">
-            {saving ? 'Menyimpan...' : '💾 SIMPAN NOTULEN'}
-         </button>
-      </div>
-    </div>
+    </>
   );
 }
