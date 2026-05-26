@@ -1,9 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { processWithGemini, transcribeAudio } from '../../lib/ai';
 
-// =========================================================================
-// TAMBAHAN CANGGIH: ANTI-TIMEOUT VERCEL (60 DETIK)
-// =========================================================================
+// Anti-Timeout Server Vercel
 export const maxDuration = 60;
 
 export const config = {
@@ -14,7 +12,7 @@ export const config = {
   },
 };
 
-// PEMBERSIH STRUKTUR JSON TINGKAT TINGGI
+// Pembersih Karakter Gaib JSON
 const superCleanJSON = (str: string) => {
   let cleaned = str.replace(/```json/gi, '').replace(/```/g, '').trim();
   cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
@@ -25,7 +23,7 @@ const superCleanJSON = (str: string) => {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Setup CORS agar tidak di-block oleh browser dengan header lengkap
+  // Setup CORS asli Anda
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -65,10 +63,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Transcript diperlukan' });
       }
       
-      // Panggil AI (Tetap mempertahankan parameter asli Anda)
+      // Panggil AI dengan parameter asli Anda
       let result = await processWithGemini(transcript, { agenda, tempat, tanggal, pimpinan });
       
-      // ANTI-HALUSINASI JSON GEMINI (THE MAGIC FIX)
+      // JIKA AI MENGEMBALIKAN STRING / TEKS MENTAH
       if (typeof result === 'string') {
         try {
           let cleanJson = String(result).replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -79,10 +77,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           
           const parsedResult = JSON.parse(cleanJson);
           
-          // =========================================================================
-          // TAMBAHAN CANGGIH: SMART DATA MERGER
-          // Memastikan metadata input tidak hilang saat objek dikirim ke database
-          // =========================================================================
+          // Satukan metadata input agar tersimpan utuh di database
           const finalPayload = {
             id: parsedResult.id || `NTLN-${Date.now()}`,
             agenda: agenda || parsedResult.agenda || '',
@@ -99,8 +94,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         } catch (parseError) {
           console.error('❌ Gagal mem-parsing teks AI:', parseError);
-          
-          // JARING PENGAMAN: Jika parse gagal, buat struktur darurat agar tidak crash saat disimpan
           return res.status(200).json({ 
             id: `NTLN-${Date.now()}`,
             agenda: agenda || '',
@@ -115,15 +108,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       }
 
-      // Jika dari sananya sudah berbentuk objek, pastikan metadatanya lengkap sebelum di-return
+      // PERBAIKAN UTAMA: Gunakan casting 'as any' agar TypeScript meloloskan pembacaan data objek
       if (result && typeof result === 'object') {
+        const resAny = result as any;
         const mergedResult = {
-          id: result.id || `NTLN-${Date.now()}`,
-          agenda: result.agenda || agenda || '',
-          tempat: result.tempat || tempat || '',
-          tanggal: result.tanggal || tanggal || '',
-          pimpinan: result.pimpinan || pimpinan || '',
-          ...result
+          id: resAny.id || `NTLN-${Date.now()}`,
+          agenda: resAny.agenda || agenda || '',
+          tempat: resAny.tempat || tempat || '',
+          tanggal: resAny.tanggal || tanggal || '',
+          pimpinan: resAny.pimpinan || pimpinan || '',
+          ...resAny
         };
         return res.status(200).json(mergedResult);
       }
