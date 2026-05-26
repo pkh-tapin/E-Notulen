@@ -18,13 +18,11 @@ interface Notulen {
 }
 
 export default function Dashboard() {
-  // --- STATE OTENTIKASI ADMIN ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  // --- STATE MANAGEMENT DATA ---
   const [notulen, setNotulen] = useState<Notulen[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,7 +30,6 @@ export default function Dashboard() {
   const [filterStatus, setFilterStatus] = useState('');
   const [stats, setStats] = useState({ total: 0, final: 0, draft: 0, thisMonth: 0 });
 
-  // Cek sesi login saat halaman pertama kali dimuat
   useEffect(() => {
     const session = localStorage.getItem('admin_auth');
     if (session === 'true') {
@@ -42,7 +39,6 @@ export default function Dashboard() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // Default kredensial sistem admin cerdas
     if (username.toLowerCase() === 'admin' && password === 'admin123') {
       setIsAuthenticated(true);
       localStorage.setItem('admin_auth', 'true');
@@ -108,7 +104,6 @@ export default function Dashboard() {
     draft: 'Draft', final: 'Final', review: 'Review'
   };
 
-  // --- SCREEN INTERFACE: GATEWAY LOGIN ADMIN ---
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center relative overflow-hidden px-4" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)' }}>
@@ -117,7 +112,6 @@ export default function Dashboard() {
           <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
         </Head>
         
-        {/* Glow Effects */}
         <div className="absolute top-1/4 left-1/4 w-72 h-72 bg-purple-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
         <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-fuchsia-600/20 rounded-full filter blur-[100px] animate-pulse"></div>
 
@@ -153,7 +147,6 @@ export default function Dashboard() {
     );
   }
 
-  // --- SCREEN INTERFACE: MAIN MANAGEMENT DASHBOARD ---
   return (
     <>
       <Head>
@@ -227,7 +220,6 @@ export default function Dashboard() {
       </Head>
 
       <div className="min-h-screen w-full max-w-[100vw] overflow-x-hidden">
-        {/* Modern Header Navigation */}
         <nav className="glass-panel sticky top-0 z-50 border-t-0 border-l-0 border-r-0 backdrop-blur-md">
           <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -261,7 +253,6 @@ export default function Dashboard() {
         </nav>
 
         <div className="max-w-7xl mx-auto px-4 py-8">
-          {/* Dashboard Info Title */}
           <div className="mb-8 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-extrabold tracking-wider text-white" style={{ textShadow: '0 4px 12px rgba(0,0,0,0.4)' }}>
@@ -271,7 +262,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Cards Metrics Dynamic Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             {[
               { label: 'Total Manuskrip', value: stats.total, icon: '📋', color: '#a78bfa' },
@@ -290,9 +280,7 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Data Table Core Viewport */}
           <div className="glass-panel rounded-2xl overflow-hidden">
-            {/* Filter Toolset Bar */}
             <div className="p-4 border-b border-white/5 bg-black/20 flex flex-col lg:flex-row gap-4 items-center justify-between">
               <div className="flex items-center gap-3 w-full lg:w-auto">
                 <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
@@ -324,7 +312,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Response Rendering Logic */}
             {loading ? (
               <div className="flex items-center justify-center py-24">
                 <div className="text-center">
