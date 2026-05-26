@@ -51,18 +51,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // =========================================================================
       // Mencegah AI mengembalikan teks mentah atau format markdown seperti ```json
       if (typeof result === 'string') {
-        try {
-          // Hilangkan format markdown backticks jika ada, lalu paksa jadi Objek JSON
-          let cleanJson = result.replace(/```json/gi, '').replace(/```/g, '').trim();
-          result = JSON.parse(cleanJson);
-        } catch (parseError) {
-          console.error('❌ Gagal mem-parsing teks AI:', parseError);
-          return res.status(500).json({ 
-            error: 'AI gagal merespons dengan format yang benar. Silakan coba generate lagi.', 
-            rawText: result 
-          });
+         try {
+  // PERBAIKAN: Paksa TypeScript (Vercel) mengenali 'result' sebagai String mutlak 
+  // menggunakan String() agar fungsi .replace() bisa berjalan sempurna.
+  let cleanJson = String(result).replace(/```json/gi, '').replace(/```/g, '').trim();
+  
+  // Gunakan variabel baru 'parsedResult' agar tidak bentrok dengan tipe data 'result' sebelumnya
+  const parsedResult = JSON.parse(cleanJson);
+  
+  // PASTIKAN ANDA MENGIRIMKAN parsedResult SEBAGAI RESPONSE (Contoh di bawah ini, sesuaikan dengan variabel return Anda)
+  return res.status(200).json(parsedResult); 
+
+} catch (parseError) {
+  console.error('❌ Gagal mem-parsing teks AI:', parseError);
+            return res.status(500).json({ 
+              error: 'AI gagal merespons dengan format yang benar. Silakan coba generate lagi.', 
+              rawText: result 
+            });
+          }
         }
-      }
 
       // Jika sukses, kembalikan objek yang sudah rapi
       return res.status(200).json(result);
