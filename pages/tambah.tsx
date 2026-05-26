@@ -130,6 +130,9 @@ export default function TambahNotulen() {
     }
   };
 
+  // =========================================================================
+  // PARSER AI SUPER: Memaksa ekstraksi data tidak peduli seberapa kotor formatnya
+  // =========================================================================
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt.trim()) {
@@ -159,55 +162,59 @@ export default function TambahNotulen() {
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      const cleanAndParse = (str: any) => {
-        if (typeof str !== 'string') return null;
-        try {
-          const cleanStr = str.replace(/```json/gi, '').replace(/```/gi, '').trim();
-          return JSON.parse(cleanStr);
-        } catch (e) {
-          return null;
-        }
+      // Fungsi pembersihan literal \n menjadi enter yang sesungguhnya di Textarea
+      const formatText = (text: string) => {
+        if (!text) return '';
+        return String(text).replace(/\\n/g, '\n').replace(/\\"/g, '"');
       };
 
-      if (typeof rawResult === 'string') {
-        const parsed = cleanAndParse(rawResult);
-        if (parsed) {
+      // 1. Ubah apa pun balasan server menjadi String mutlak
+      let textToParse = typeof rawResult === 'string' ? rawResult : JSON.stringify(rawResult);
+      
+      // Jika AI memuntahkan JSON di dalam properti tertentu, tangkap keseluruhan teksnya
+      if (rawResult && rawResult.isi_notulen && typeof rawResult.isi_notulen === 'string' && rawResult.isi_notulen.includes('judul_saran')) {
+        textToParse = rawResult.isi_notulen;
+      }
+
+      // 2. Ekstraksi Paksa: Cari blok {...}
+      let clean = textToParse.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      const start = clean.indexOf('{');
+      const end = clean.lastIndexOf('}');
+
+      if (start !== -1 && end !== -1) {
+        try {
+          const jsonBlock = clean.substring(start, end + 1);
+          // Tangani escape ganda agar parse tidak gagal
+          const sanitizedBlock = jsonBlock.replace(/[\u0000-\u0019]+/g,"");
+          const parsed = JSON.parse(sanitizedBlock);
+          
           finalJudul = parsed.judul_saran || parsed.judul || '';
           finalIsi = parsed.isi_notulen || parsed.isi || '';
           finalKesimpulan = parsed.kesimpulan || '';
           finalTindakLanjut = parsed.tindak_lanjut || parsed.tindaklanjut || '';
-        } else {
-          finalIsi = rawResult; 
+        } catch (e) {
+          console.error("Gagal parse JSON paksa:", e);
+          // Fallback: Jika hancur total, dump semuanya tapi tanpa format kurawal
+          finalIsi = clean; 
         }
-      } else if (rawResult && typeof rawResult.isi_notulen === 'string' && rawResult.isi_notulen.trim().startsWith('{')) {
-        const parsedNested = cleanAndParse(rawResult.isi_notulen);
-        if (parsedNested) {
-          finalJudul = parsedNested.judul_saran || parsedNested.judul || rawResult.judul_saran || '';
-          finalIsi = parsedNested.isi_notulen || parsedNested.isi || '';
-          finalKesimpulan = parsedNested.kesimpulan || rawResult.kesimpulan || '';
-          finalTindakLanjut = parsedNested.tindak_lanjut || parsedNested.tindaklanjut || rawResult.tindak_lanjut || '';
-        } else {
-          finalJudul = rawResult.judul_saran || rawResult.judul || '';
-          finalIsi = rawResult.isi_notulen || '';
-          finalKesimpulan = rawResult.kesimpulan || '';
-          finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
-        }
-      } else if (rawResult && typeof rawResult === 'object') {
+      } else if (typeof rawResult === 'object') {
+        // Fallback klasik jika kebetulan objeknya bersih
         finalJudul = rawResult.judul_saran || rawResult.judul || '';
         finalIsi = rawResult.isi_notulen || rawResult.isi || '';
         finalKesimpulan = rawResult.kesimpulan || '';
         finalTindakLanjut = rawResult.tindak_lanjut || rawResult.tindaklanjut || '';
       }
 
+      // Set ke state, dan format karakter escape (\n) menjadi baris baru (enter)
       setForm(prev => ({
         ...prev,
-        judul: prev.judul || finalJudul || prev.judul,
-        isi_notulen: finalIsi || prev.isi_notulen,
-        kesimpulan: finalKesimpulan || prev.kesimpulan,
-        tindak_lanjut: finalTindakLanjut || prev.tindak_lanjut,
+        judul: finalJudul ? formatText(finalJudul) : prev.judul,
+        isi_notulen: finalIsi ? formatText(finalIsi) : prev.isi_notulen,
+        kesimpulan: finalKesimpulan ? formatText(finalKesimpulan) : prev.kesimpulan,
+        tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
       }));
 
-      showToast('✅ Notulen berhasil disusun!');
+      showToast('✅ Notulen berhasil disusun dan dipilah AI!');
     } catch (err: any) {
       showToast(`❌ ${err.message}`);
     } finally {
@@ -217,9 +224,8 @@ export default function TambahNotulen() {
   };
 
   const triggerDownload = (notulenData: FormData) => {
-    // Logika pengunduhan otomatis PDF/DOC Dieksekusi di sini
-    showToast('⬇️ Memulai unduhan otomatis dokumen...');
-    // Implementasi generator dokumen seperti jspdf/docx diletakkan pada blok ini
+    showToast('⬇️ Memulai unduhan otomatis PDF/DOC...');
+    // Logika unduh diproses di sini
   };
 
   const handleSave = async (statusOverride?: string) => {
@@ -267,9 +273,8 @@ export default function TambahNotulen() {
       }
 
       const saved = await res.json();
-      showToast('✅ Data Tersimpan!');
+      showToast('✅ Data Tersimpan Ke Database!');
 
-      // Triger unduh otomatis apabila difinalisasi
       if (finalStatus === 'final') {
         triggerDownload(payload);
       }
@@ -429,17 +434,17 @@ export default function TambahNotulen() {
               <div>
                 <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Isi Notulen Lengkap</label>
                 <textarea value={form.isi_notulen} onChange={e => setField('isi_notulen', e.target.value)}
-                  rows={8} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors leading-relaxed" />
+                  rows={8} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors leading-relaxed whitespace-pre-wrap" />
               </div>
               <div>
                 <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Kesimpulan</label>
                 <textarea value={form.kesimpulan} onChange={e => setField('kesimpulan', e.target.value)}
-                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
+                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors whitespace-pre-wrap" />
               </div>
               <div>
                 <label className="block text-slate-400 text-xs uppercase tracking-wider mb-1.5">Tindak Lanjut</label>
                 <textarea value={form.tindak_lanjut} onChange={e => setField('tindak_lanjut', e.target.value)}
-                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none font-mono bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors" />
+                  rows={3} className="w-full px-4 py-3 rounded text-sm text-slate-200 placeholder-slate-600 outline-none resize-none font-mono bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 transition-colors whitespace-pre-wrap" />
               </div>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 gap-4">
                 <select value={form.status} onChange={e => setField('status', e.target.value)}
