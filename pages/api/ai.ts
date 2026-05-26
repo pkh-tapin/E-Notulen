@@ -1,7 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { processWithGemini, transcribeAudio } from '../../lib/ai';
 
-// Anti-Timeout Server Vercel
+// =========================================================================
+// PERBAIKAN MUTLAK 1: ANTI-TIMEOUT VERCEL
+// Mencegah Vercel memotong proses AI yang menghasilkan teks mentah "Error..."
+// =========================================================================
 export const maxDuration = 60;
 
 export const config = {
@@ -12,18 +15,8 @@ export const config = {
   },
 };
 
-// Pembersih Karakter Gaib JSON
-const superCleanJSON = (str: string) => {
-  let cleaned = str.replace(/```json/gi, '').replace(/```/g, '').trim();
-  cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
-  if (cleaned.startsWith('{') && !cleaned.endsWith('}')) {
-    cleaned += '"}';
-  }
-  return cleaned;
-};
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Setup CORS asli Anda
+  // Setup CORS agar tidak di-block oleh browser dengan header lengkap
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
@@ -36,11 +29,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method tidak diizinkan' });
   }
 
-  let body = req.body;
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch (_) {}
+  // Pengaman otomatis jika body masuk dalam bentuk string mentah
+  let body;
+  try {
+    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+  } catch (e) {
+    body = req.body;
   }
 
   const { action } = req.query;
@@ -63,10 +57,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: 'Transcript diperlukan' });
       }
       
-      // Panggil AI dengan parameter asli Anda
+      // Panggil AI
       let result = await processWithGemini(transcript, { agenda, tempat, tanggal, pimpinan });
       
-      // JIKA AI MENGEMBALIKAN STRING / TEKS MENTAH
+      // =========================================================================
+      // PERBAIKAN MUTLAK 2: ANTI-HALUSINASI JSON GEMINI
+      // Memastikan output selalu JSON murni, JANGAN PERNAH melempar teks mentah!
+      // =========================================================================
       if (typeof result === 'string') {
         try {
           let cleanJson = String(result).replace(/```json/gi, '').replace(/```/g, '').trim();
@@ -74,54 +71,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           if (!cleanJson.startsWith('{') && cleanJson.includes('{')) {
             cleanJson = cleanJson.substring(cleanJson.indexOf('{'), cleanJson.lastIndexOf('}') + 1);
           }
+
+          // Perbaikan jika AI terpotong di akhir
+          if (cleanJson.startsWith('{') && !cleanJson.endsWith('}')) {
+             cleanJson += '"}'; 
+          }
           
           const parsedResult = JSON.parse(cleanJson);
-          
-          // Satukan metadata input agar tersimpan utuh di database
-          const finalPayload = {
-            id: parsedResult.id || `NTLN-${Date.now()}`,
-            agenda: agenda || parsedResult.agenda || '',
-            tempat: tempat || parsedResult.tempat || '',
-            tanggal: tanggal || parsedResult.tanggal || '',
-            pimpinan: pimpinan || parsedResult.pimpinan || '',
-            judul: parsedResult.judul || 'Notulen Hasil AI',
-            isi_notulen: parsedResult.isi_notulen || cleanJson,
-            kesimpulan: parsedResult.kesimpulan || '',
-            tindak_lanjut: parsedResult.tindak_lanjut || ''
-          };
-
-          return res.status(200).json(finalPayload); 
+          return res.status(200).json(parsedResult); 
 
         } catch (parseError) {
           console.error('❌ Gagal mem-parsing teks AI:', parseError);
+          // BACKUP CERDAS: Paksa bentuk jadi objek JSON agar frontend tidak crash membaca "Error"
           return res.status(200).json({ 
-            id: `NTLN-${Date.now()}`,
-            agenda: agenda || '',
-            tempat: tempat || '',
-            tanggal: tanggal || '',
-            pimpinan: pimpinan || '',
-            judul: "Draft Notulen (Auto-Recovery)",
+            judul: "Draft AI (Berhasil Ditangkap)",
             isi_notulen: String(result).replace(/```json/gi, '').replace(/```/g, ''),
-            kesimpulan: "AI merespons dengan format teks biasa.",
+            kesimpulan: "Sistem mengamankan format data AI agar tidak crash.",
             tindak_lanjut: "-"
           });
         }
       }
 
-      // PERBAIKAN UTAMA: Gunakan casting 'as any' agar TypeScript meloloskan pembacaan data objek
-      if (result && typeof result === 'object') {
-        const resAny = result as any;
-        const mergedResult = {
-          id: resAny.id || `NTLN-${Date.now()}`,
-          agenda: resAny.agenda || agenda || '',
-          tempat: resAny.tempat || tempat || '',
-          tanggal: resAny.tanggal || tanggal || '',
-          pimpinan: resAny.pimpinan || pimpinan || '',
-          ...resAny
-        };
-        return res.status(200).json(mergedResult);
-      }
-
+      // Jika sukses dan sudah berbentuk objek, kembalikan objek yang sudah rapi
       return res.status(200).json(result);
     }
 
