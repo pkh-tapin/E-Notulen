@@ -1,126 +1,137 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../../lib/sheets';
+import { GoogleSpreadsheet } from 'google-spreadsheet';
+import { JWT } from 'google-auth-library';
 
-// CANGGIH: Kapasitas besar agar teks AI super panjang tidak terkena Error 413 (Payload Too Large)
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb', 
-    },
-  },
-};
+const SHEET_HEADERS = [
+  'id', 'judul', 'tanggal', 'waktu_mulai', 'waktu_selesai',
+  'tempat', 'pimpinan_rapat', 'notulis', 'peserta',
+  'agenda', 'isi_notulen', 'kesimpulan', 'tindak_lanjut',
+  'status', 'created_at', 'updated_at', 'raw_transcript'
+];
 
-// HELPER SANITIZER: Mengubah nilai 'undefined' atau 'null' menjadi string kosong "" 
-// agar Google Sheets API tidak mogok/error saat proses penulisan data.
-const cleanObjectData = (obj: any): any => {
-  if (!obj || typeof obj !== 'object') return obj;
-  const copy = Array.isArray(obj) ? [...obj] : { ...obj };
+let docCache: any = null;
+
+async function getDoc() {
+  if (docCache) return docCache;
   
-  for (const key in copy) {
-    if (copy[key] === undefined || copy[key] === null) {
-      copy[key] = ''; // Ganti semua yang kosong dengan string aman
-    } else if (typeof copy[key] === 'object') {
-      copy[key] = cleanObjectData(copy[key]); // Bersihkan rekursif jika ada objek bersarang
-    }
-  }
-  return copy;
-};
+  // PERBAIKAN MUTLAK 1: Mencegah error "Cannot read properties of undefined (reading 'replace')"
+  const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY;
+  const rawEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const rawSheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (!rawPrivateKey || !rawEmail || !rawSheetId) {
+    throw new Error("KONFIGURASI FATAL: Variabel .env untuk Google Sheets (Email, Private Key, atau Sheet ID) tidak ditemukan atau kosong!");
   }
 
-  try {
-    // =========================================================================
-    // METHOD GET: AMBIL DATA NOTULEN
-    // =========================================================================
-    if (req.method === 'GET') {
-      const { tanggal, id } = req.query;
+  // Aman untuk menggunakan replace karena kita sudah memastikan nilainya berupa string
+  const privateKey = typeof rawPrivateKey === 'string' 
+    ? rawPrivateKey.replace(/\\n/g, '\n').replace(/^"|"$/g, '').trim()
+    : '';
 
-      if (id) {
-        const all = await getAllNotulen();
-        const found = all.find((n: any) => String(n.id) === String(id));
-        if (!found) return res.status(404).json({ error: 'Notulen tidak ditemukan' });
-        return res.status(200).json(found);
-      }
+  const auth = new JWT({
+    email: rawEmail,
+    key: privateKey,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+  
+  const doc = new GoogleSpreadsheet(rawSheetId, auth);
+  await doc.loadInfo();
+  docCache = doc;
+  return doc;
+}
 
-      if (tanggal) {
-        const data = await getNotulenByDate(tanggal as string);
-        return res.status(200).json(data);
-      }
-
-      const data = await getAllNotulen();
-      // Sorting otomatis: Tanggal terbaru ditaruh paling atas
-      const sorted = data.sort((a: any, b: any) => {
-        const dateA = new Date(a.tanggal || 0).getTime();
-        const dateB = new Date(b.tanggal || 0).getTime();
-        return dateB - dateA;
-      });
-      return res.status(200).json(sorted);
+export async function getAllNotulen() {
+  const doc = await getDoc();
+  const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
+  const rows = await sheet.getRows();
+  
+  return rows.map((row: any) => {
+    if (typeof row.toObject === 'function') {
+      return row.toObject();
     }
-
-    // =========================================================================
-    // METHOD POST: SIMPAN NOTULEN BARU HASIL GENERATE AI
-    // =========================================================================
-    if (req.method === 'POST') {
-      const body = req.body;
-      if (!body || !body.judul || !body.tanggal) {
-        return res.status(400).json({ error: 'Gagal: Judul dan tanggal wajib diisi' });
-      }
-
-      console.log('🔄 Memulai pembersihan data & sinkronisasi ke Google Sheets...');
-      
-      // Bersihkan data dari undefined tanpa menambahkan field baru yang bisa merusak struktur sheet
-      const cleanedBody = cleanObjectData(body);
-
-      // Jalankan fungsi simpan bawaan sistem Anda
-      const saved = await saveNotulen(cleanedBody);
-      console.log('✅ Sukses masuk database Google Sheets!');
-
-      // Kembalikan response sukses ke frontend agar loading screen selesai
-      return res.status(201).json(saved || cleanedBody);
-    }
-
-    // =========================================================================
-    // METHOD PUT: UPDATE DATA NOTULEN
-    // =========================================================================
-    if (req.method === 'PUT') {
-      const body = req.body;
-      if (!body || !body.id) {
-        return res.status(400).json({ error: 'ID wajib diisi untuk melakukan pembaruan' });
-      }
-
-      console.log(`🔄 Mengupdate Data Notulen ID: ${body.id}`);
-      const cleanedBody = cleanObjectData(body);
-      const saved = await saveNotulen(cleanedBody);
-      return res.status(200).json(saved || cleanedBody);
-    }
-
-    // =========================================================================
-    // METHOD DELETE: HAPUS NOTULEN
-    // =========================================================================
-    if (req.method === 'DELETE') {
-      const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
-
-      console.log(`🗑️ Menghapus Notulen ID: ${id}`);
-      const ok = await deleteNotulen(id as string);
-      return res.status(200).json({ success: ok });
-    }
-
-    return res.status(405).json({ error: 'Method tidak diizinkan' });
-
-  } catch (error: any) {
-    console.error('❌ [CRITICAL SYSTEM ERROR]:', error);
-    return res.status(500).json({ 
-      error: 'Gagal memproses atau menyimpan data ke Google Sheets.', 
-      details: error.message 
+    const obj: any = {};
+    SHEET_HEADERS.forEach(header => {
+      obj[header] = row.get ? row.get(header) : row[header];
     });
+    return obj;
+  });
+}
+
+export async function saveNotulen(data: any) {
+  const doc = await getDoc();
+  const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
+  
+  const cleanData: any = {};
+  
+  // PERBAIKAN MUTLAK 2: Pengecekan ketat sebelum melakukan replace pada data string
+  SHEET_HEADERS.forEach(key => {
+    let val = data[key];
+    if (val === undefined || val === null) {
+      cleanData[key] = ''; 
+    } else if (typeof val === 'string') {
+      cleanData[key] = val.replace(/\*/g, '').trim(); 
+    } else {
+      cleanData[key] = String(val); 
+    }
+  });
+  
+  cleanData.status = cleanData.status || 'draft';
+  cleanData.updated_at = new Date().toISOString();
+
+  if (data.id) {
+    const rows = await sheet.getRows();
+    const row = rows.find((r: any) => (r.get ? r.get('id') : r.id) === data.id);
+    
+    if (row) {
+      if (typeof row.assign === 'function') {
+        row.assign(cleanData);
+      } else {
+        SHEET_HEADERS.forEach(header => {
+          if (cleanData[header] !== undefined) {
+            if (typeof row.set === 'function') {
+              row.set(header, cleanData[header]); 
+            } else {
+              row[header] = cleanData[header]; 
+            }
+          }
+        });
+      }
+      
+      await row.save();
+      return cleanData;
+    }
   }
+  
+  cleanData.id = cleanData.id || `NTL-${Date.now()}`;
+  cleanData.created_at = cleanData.created_at || new Date().toISOString();
+  
+  await sheet.addRow(cleanData);
+  return cleanData;
+}
+
+export async function getNotulenByDate(date: string) {
+  const doc = await getDoc();
+  const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
+  const rows = await sheet.getRows();
+  
+  const filteredRows = rows.filter((r: any) => (r.get ? r.get('tanggal') : r.tanggal) === date);
+  return filteredRows.map((row: any) => {
+    if (typeof row.toObject === 'function') return row.toObject();
+    const obj: any = {};
+    SHEET_HEADERS.forEach(header => { obj[header] = row.get ? row.get(header) : row[header]; });
+    return obj;
+  });
+}
+
+export async function deleteNotulen(id: string) {
+  const doc = await getDoc();
+  const sheet = doc.sheetsByTitle['Notulen'];
+  if (!sheet) return false;
+  
+  const rows = await sheet.getRows();
+  const row = rows.find((r: any) => (r.get ? r.get('id') : r.id) === id);
+  if (row) {
+    await row.delete();
+    return true;
+  }
+  return false;
 }
