@@ -216,6 +216,12 @@ export default function TambahNotulen() {
     }
   };
 
+  const triggerDownload = (notulenData: FormData) => {
+    // Logika pengunduhan otomatis PDF/DOC Dieksekusi di sini
+    showToast('⬇️ Memulai unduhan otomatis dokumen...');
+    // Implementasi generator dokumen seperti jspdf/docx diletakkan pada blok ini
+  };
+
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan tanggal wajib diisi');
@@ -223,6 +229,8 @@ export default function TambahNotulen() {
     }
 
     setSaving(true);
+    const finalStatus = statusOverride || form.status || 'draft';
+
     try {
       const payload = {
         judul: String(form.judul || ''),
@@ -237,7 +245,7 @@ export default function TambahNotulen() {
         isi_notulen: String(form.isi_notulen || ''),
         kesimpulan: String(form.kesimpulan || ''),
         tindak_lanjut: String(form.tindak_lanjut || ''),
-        status: statusOverride || form.status || 'draft',
+        status: finalStatus,
         raw_transcript: String(form.raw_transcript || '')
       };
 
@@ -259,14 +267,14 @@ export default function TambahNotulen() {
       }
 
       const saved = await res.json();
-      showToast('✅ Tersimpan!');
-      
-      // Unduh otomatis jika diset sebagai Finalisasi
-      if (statusOverride === 'final') {
-          handleDownloadDocument();
-      }
+      showToast('✅ Data Tersimpan!');
 
-      setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1200);
+      // Triger unduh otomatis apabila difinalisasi
+      if (finalStatus === 'final') {
+        triggerDownload(payload);
+      }
+      
+      setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1500);
       
     } catch (err: any) {
       console.error("DEBUG SIMPAN:", err);
@@ -274,11 +282,6 @@ export default function TambahNotulen() {
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleDownloadDocument = () => {
-      showToast('⬇️ Mengunduh dokumen otomatis...');
-      // Logic PDF/DOC Generator di sini (misal menggunakan jspdf atau endpoint API render)
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -290,7 +293,6 @@ export default function TambahNotulen() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      {/* Overflow-x-hidden untuk mencegah scroll horizontal */}
       <div className="min-h-screen bg-[#020818] overflow-x-hidden w-full text-slate-200">
         
         {toast && (
@@ -300,7 +302,6 @@ export default function TambahNotulen() {
           </div>
         )}
 
-        {/* Navbar */}
         <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur-xl bg-[#040d2b]/80 w-full">
           <div className="w-full max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3 md:gap-4">
@@ -326,7 +327,6 @@ export default function TambahNotulen() {
           </div>
         </nav>
 
-        {/* Content Container */}
         <div className="w-full max-w-5xl mx-auto px-4 py-6 md:py-8 space-y-6">
           
           <div className="rounded-xl p-5 md:p-6 backdrop-blur-lg bg-[#040d2b]/60 border border-cyan-900/50 shadow-[0_0_15px_rgba(34,211,238,0.05)]">
@@ -443,7 +443,7 @@ export default function TambahNotulen() {
               </div>
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center pt-4 gap-4">
                 <select value={form.status} onChange={e => setField('status', e.target.value)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded text-sm outline-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50">
+                  className="w-full sm:w-auto px-4 py-2.5 rounded text-sm outline-none bg-[#0a1536] border border-cyan-900/50 focus:border-cyan-500/50 text-slate-200">
                   <option value="draft">📝 Draft</option>
                   <option value="review">👁️ Review</option>
                   <option value="final">✅ Final</option>
