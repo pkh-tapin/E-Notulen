@@ -1,141 +1,121 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { processWithGemini, transcribeAudio } from '../../lib/ai';
+// GUNAKAN @ UNTUK IMPORT AGAR TIDAK ERROR "CANNOT FIND MODULE"
+import { processWithGemini, transcribeAudio } from '@/lib/ai'; 
 
-// =========================================================================
-// TAMBAHAN CANGGIH 1: ANTI-TIMEOUT
-// Mencegah server (Vercel) memotong paksa proses AI yang butuh waktu lama
-// =========================================================================
+// Mencegah Vercel memotong proses (Max 60 Detik)
 export const maxDuration = 60; 
 
+// Konfigurasi wajib untuk membaca file/audio raksasa (50MB)
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '50mb', // untuk file audio besar
+      sizeLimit: '50mb', 
     },
   },
 };
 
-// =========================================================================
-// TAMBAHAN CANGGIH 2: MESIN PEMBERSIH JSON KELAS DEWA
-// Menghapus karakter gaib (control characters) yang bikin JSON.parse hancur
-// =========================================================================
+// Mesin Pembersih Halusinasi AI
 const superCleanJSON = (str: string) => {
   let cleaned = str.replace(/```json/gi, '').replace(/```/g, '').trim();
-  // Hapus karakter unicode/invisible yang sering diselipkan AI
   cleaned = cleaned.replace(/[\u0000-\u001F\u007F-\u009F]/g, "");
   
-  // Deteksi otomatis jika AI lupa menutup kurung kurawal di akhir teks
   if (cleaned.startsWith('{') && !cleaned.endsWith('}')) {
-    cleaned += '"}'; // Penutup darurat
+    cleaned += '"}'; 
   }
   return cleaned;
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Setup CORS agar tidak di-block oleh browser dengan header lengkap
+  // Setup Keamanan Lintas Server
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method tidak diizinkan' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method tidak diizinkan' });
-  }
-
-  // Pengaman otomatis jika body masuk dalam bentuk string mentah
+  // 🛡️ PENANGANAN FILE CERDAS: Jika payload dikirim sebagai string raksasa
   let body = req.body;
   if (typeof body === 'string') {
     try {
       body = JSON.parse(body);
-    } catch (_) {}
+    } catch (_) {
+      console.warn("⚠️ Peringatan: Body tidak bisa di-parse otomatis. Mungkin berisi format binary/file mentah.");
+    }
   }
 
   const { action } = req.query;
 
   try {
-    // 1. Action untuk ubah Suara ke Teks
+    // =======================================================
+    // ACTION 1: TRANSCRIBE (SUARA KE TEKS)
+    // =======================================================
     if (action === 'transcribe') {
       const { audioBase64, mimeType } = body;
+      
+      // Validasi Ekstra untuk memastikan file benar-benar masuk
       if (!audioBase64) {
-        return res.status(400).json({ error: 'Data audio diperlukan' });
+        return res.status(400).json({ 
+          error: 'Data audio tidak ditemukan. Pastikan frontend mengirim dengan key "audioBase64" (bukan FormData murni).' 
+        });
       }
       
       try {
+        console.log("🎙️ Mulai membaca file audio...");
         const transcript = await transcribeAudio(audioBase64, mimeType || 'audio/webm');
         return res.status(200).json({ transcript });
       } catch (transcribeErr: any) {
-        console.error('❌ Gagal Transcribe:', transcribeErr);
-        return res.status(500).json({ error: 'Gagal memproses audio, file mungkin korup atau format tidak didukung.' });
+        console.error('❌ Gagal Membaca File Audio:', transcribeErr);
+        return res.status(500).json({ error: 'Sistem AI gagal membaca file audio Anda.' });
       }
     }
 
-    // 2. Action untuk merapikan Teks jadi Notulen
+    // =======================================================
+    // ACTION 2: PROCESS (TEKS KE NOTULEN)
+    // =======================================================
     if (action === 'process') {
       const { transcript, agenda, tempat, tanggal, pimpinan } = body;
       
       if (!transcript) {
-         return res.status(400).json({ error: 'Transcript kosong, tidak ada data untuk diproses.' });
+         return res.status(400).json({ error: 'Transcript kosong!' });
       }
 
       console.log("🚀 Menghubungi Gemini AI...");
       const result = await processWithGemini(transcript, agenda, tempat, tanggal, pimpinan);
       
-      if (!result) {
-         throw new Error("Gemini AI tidak memberikan respons apapun.");
-      }
+      if (!result) throw new Error("Gemini AI tidak merespons.");
 
-      // ANTI-HALUSINASI JSON GEMINI (THE MAGIC FIX)
-      // =========================================================================
-      // Mencegah AI mengembalikan teks mentah atau format markdown seperti ```json
+      // Anti-Error JSON dari Gemini AI
       if (typeof result === 'string') {
         try {
-          // PERBAIKAN: Paksa TypeScript mengenali 'result' sebagai String mutlak 
-          // menggunakan String() agar fungsi pembersih berjalan sempurna.
           let cleanJson = superCleanJSON(String(result));
           
-          // ANTISIPASI EKSTRA: Jika AI memberikan teks pembuka sebelum tanda '{'
           if (!cleanJson.startsWith('{') && cleanJson.includes('{')) {
             cleanJson = cleanJson.substring(cleanJson.indexOf('{'), cleanJson.lastIndexOf('}') + 1);
           }
           
-          // Gunakan variabel baru 'parsedResult' agar tidak bentrok
-          const parsedResult = JSON.parse(cleanJson);
-          
-          // PASTIKAN ANDA MENGIRIMKAN parsedResult SEBAGAI RESPONSE
-          return res.status(200).json(parsedResult); 
+          return res.status(200).json(JSON.parse(cleanJson)); 
 
         } catch (parseError) {
           console.error('❌ Gagal mem-parsing teks AI:', parseError);
-          console.error('RAW TEXT DARI AI:', result); // Log untuk debug di console server
-          
-          // =====================================================================
-          // TAMBAHAN CANGGIH 3: FALLBACK EKSTRIM (JARING PENGAMAN)
-          // Jika AI ngawur parah dan JSON.parse tetap gagal, jangan lempar Error 500!
-          // Paksa ambil teksnya dan jadikan JSON darurat agar aplikasi tetap berjalan.
-          // =====================================================================
+          // Fallback Darurat agar tidak crash di frontend
           return res.status(200).json({ 
             judul: "Draft Notulen (Auto-Recovery)",
             isi_notulen: String(result).replace(/```json/gi, '').replace(/```/g, ''),
-            kesimpulan: "AI menghasilkan format yang sulit diproses otomatis. Silakan rapikan manual.",
+            kesimpulan: "Sistem mendeteksi format aneh, silakan rapikan manual.",
             tindak_lanjut: "-"
           });
         }
       }
 
-      // Jika sukses dan AI memang sudah merespons dalam bentuk objek (bukan string), kembalikan langsung
       return res.status(200).json(result);
     }
 
-    return res.status(400).json({ error: 'Action tidak valid. Gunakan endpoint: transcribe atau process' });
+    return res.status(400).json({ error: 'Action tidak valid!' });
   } catch (error: any) {
-    console.error('❌ AI API Error Terluar:', error);
-    // Pastikan error berbentuk JSON yang aman dan terbaca frontend
+    console.error('❌ SYSTEM ERROR:', error);
     return res.status(500).json({ 
-      error: error?.message || 'Terjadi kesalahan sistem internal pada AI.',
-      details: error?.toString() || ''
+      error: error?.message || 'Terjadi kesalahan internal AI.'
     });
   }
 }
