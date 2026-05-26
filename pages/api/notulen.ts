@@ -1,7 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../../lib/sheets';
 
-// CANGGIH: Kapasitas besar agar teks AI super panjang tidak terkena Error 413 (Payload Too Large)
+export const maxDuration = 60;
+
 export const config = {
   api: {
     bodyParser: {
@@ -10,16 +11,14 @@ export const config = {
   },
 };
 
-// FILTER BAJA: Membersihkan nilai kosong dan menghapus karakter aneh yang membuat Google Sheets Error 500
 const cleanObjectData = (obj: any): any => {
   if (!obj || typeof obj !== 'object') return obj;
   const copy = Array.isArray(obj) ? [...obj] : { ...obj };
   
   for (const key in copy) {
     if (copy[key] === undefined || copy[key] === null) {
-      copy[key] = ''; // Ganti semua yang kosong dengan string aman
+      copy[key] = ''; 
     } else if (typeof copy[key] === 'string') {
-      // Hapus karakter unicode tersembunyi yang sering merusak query Google Sheets
       copy[key] = copy[key].replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
     } else if (typeof copy[key] === 'object') {
       copy[key] = cleanObjectData(copy[key]); 
@@ -29,7 +28,6 @@ const cleanObjectData = (obj: any): any => {
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -39,9 +37,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // =========================================================================
-    // METHOD GET: AMBIL DATA
-    // =========================================================================
     if (req.method === 'GET') {
       const { id, date } = req.query;
 
@@ -61,24 +56,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(allData);
     }
 
-    // =========================================================================
-    // METHOD POST: SIMPAN DATA BARU
-    // =========================================================================
     if (req.method === 'POST') {
       const body = req.body;
       console.log('📥 Menerima Data Baru untuk Disimpan');
       
       let cleanedBody = cleanObjectData(body);
       
-      // =========================================================================
-      // TAMBAHAN SUPER CANGGIH: AUTO ID & ANTI-1899 DATE RECOVERY GUARD
-      // =========================================================================
+      // Auto-ID Guard
       if (!cleanedBody.id) {
         cleanedBody.id = `NTLN-${Date.now()}`;
       }
       
-      // Jika tanggal tidak valid, kosong, atau default system bermasalah (1899), paksa isi tanggal hari ini
-      if (!cleanedBody.tanggal || cleanedBody.tanggal.includes('1899') || cleanedBody.tanggal === '') {
+      // Anti-1899 Date Recovery Guard
+      if (!cleanedBody.tanggal || String(cleanedBody.tanggal).includes('1899') || cleanedBody.tanggal === '') {
         const tglSekarang = new Date();
         const yyyy = tglSekarang.getFullYear();
         const mm = String(tglSekarang.getMonth() + 1).padStart(2, '0');
@@ -90,9 +80,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(201).json(saved || cleanedBody);
     }
 
-    // =========================================================================
-    // METHOD PUT: UPDATE DATA NOTULEN
-    // =========================================================================
     if (req.method === 'PUT') {
       const body = req.body;
       if (!body || !body.id) {
@@ -106,9 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(saved || cleanedBody);
     }
 
-    // =========================================================================
-    // METHOD DELETE: HAPUS NOTULEN
-    // =========================================================================
     if (req.method === 'DELETE') {
       const { id } = req.query;
       if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
