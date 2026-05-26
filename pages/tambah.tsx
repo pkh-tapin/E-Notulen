@@ -24,6 +24,7 @@ export default function TambahNotulen() {
   const router = useRouter();
   const { edit } = router.query;
   
+  // PERBAIKAN 1: Pastikan edit ID selalu berupa string tunggal (mencegah error array router Next.js)
   const editId = Array.isArray(edit) ? edit[0] : edit;
   const isEdit = !!editId;
 
@@ -45,6 +46,7 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Load data if editing
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen?id=${editId}`)
@@ -58,13 +60,14 @@ export default function TambahNotulen() {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 4500);
+    setTimeout(() => setToast(''), 4500); // Diperlama sedikit agar pesan error terbaca
   };
 
   const setField = (key: keyof FormData, val: string) => {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
+  // Voice recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -107,6 +110,7 @@ export default function TambahNotulen() {
     setAiStep('🎙️ Mengonversi audio ke teks...');
 
     try {
+      // Convert to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -114,6 +118,7 @@ export default function TambahNotulen() {
         reader.readAsDataURL(blob);
       });
 
+      // Transcribe
       const transcribeRes = await fetch('/api/ai?action=transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -122,6 +127,7 @@ export default function TambahNotulen() {
       const { transcript } = await transcribeRes.json();
       setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
 
+      // Process to formal notulen
       await processTranscript(transcript);
     } catch (err: any) {
       showToast(`❌ ${err.message}`);
@@ -146,10 +152,10 @@ export default function TambahNotulen() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcript: txt,
-          agenda: form.agenda || 'Tidak ada agenda spesifik',
-          tempat: form.tempat || 'Tidak ditentukan',
-          tanggal: form.tanggal || new Date().toISOString().split('T')[0],
-          pimpinan: form.pimpinan_rapat || 'Tidak ditentukan'
+          agenda: form.agenda,
+          tempat: form.tempat,
+          tanggal: form.tanggal,
+          pimpinan: form.pimpinan_rapat
         })
       });
       const rawResult = await res.json();
@@ -159,16 +165,12 @@ export default function TambahNotulen() {
       let finalKesimpulan = '';
       let finalTindakLanjut = '';
 
-      // PERBAIKAN MUTLAK 3: Guard anti error replace pada respon AI
       const cleanAndParse = (str: any) => {
-        if (!str || typeof str !== 'string') return null;
+        if (typeof str !== 'string') return null; // FIX: Mencegah Error Type 'never' pada proses replace AI
         try {
-          const jsonMatch = str.match(/\{[\s\S]*\}/);
-          if (jsonMatch) return JSON.parse(jsonMatch[0]);
           const cleanStr = str.replace(/```json/gi, '').replace(/```/gi, '').trim();
           return JSON.parse(cleanStr);
         } catch (e) {
-          console.warn("Gagal parse JSON AI:", e);
           return null;
         }
       };
@@ -215,14 +217,14 @@ export default function TambahNotulen() {
 
       showToast('✅ Notulen berhasil digenerate oleh AI!');
     } catch (err: any) {
-      console.error("AI Error:", err);
-      showToast(`❌ AI Error: ${err.message}`);
+      showToast(`❌ ${err.message}`);
     } finally {
       setAiLoading(false);
       setAiStep('');
     }
   };
 
+  // PERBAIKAN 2: FUNGSI SIMPAN YANG JAUH LEBIH KUAT DAN INFORMATIF
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan tanggal wajib diisi');
@@ -231,6 +233,7 @@ export default function TambahNotulen() {
 
     setSaving(true);
     try {
+      // FIX: Memastikan paksa field casting string agar API Spreadsheet TIDAK crash membaca nilai undefined
       const payload = {
         judul: String(form.judul || ''),
         tanggal: String(form.tanggal || ''),
@@ -260,17 +263,21 @@ export default function TambahNotulen() {
         body: JSON.stringify(body)
       });
 
+      // Menangkap pesan error ASLI dari backend/Sheets jika gagal
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.details || errData.error || `HTTP Error ${res.status}`);
       }
 
       const saved = await res.json();
+
       showToast('✅ Notulen berhasil disimpan!');
+      // Gunakan saved.id jika baru buat, atau editId jika mode edit
       setTimeout(() => router.push(`/notulen/${saved.id || editId}`), 1200);
       
     } catch (err: any) {
       console.error("DEBUG SIMPAN:", err);
+      // Menampilkan alasan gagal yang sebenarnya ke layar
       showToast(`❌ Gagal: ${err.message}`);
     } finally {
       setSaving(false);
@@ -286,6 +293,7 @@ export default function TambahNotulen() {
       </Head>
 
       <div className="min-h-screen grid-bg" style={{ background: '#020818' }}>
+        {/* Toast */}
         {toast && (
           <div className="fixed top-4 right-4 z-50 px-5 py-3 rounded-lg text-sm font-medium animate-slide-up"
             style={{ background: '#061240', border: '1px solid #22d3ee40', color: '#e2e8f0', boxShadow: '0 0 20px #22d3ee20' }}>
@@ -293,6 +301,7 @@ export default function TambahNotulen() {
           </div>
         )}
 
+        {/* Nav */}
         <nav className="border-b border-cyan-500/20 sticky top-0 z-40 backdrop-blur" style={{ background: '#040d2b95' }}>
           <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -321,6 +330,7 @@ export default function TambahNotulen() {
         </nav>
 
         <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+          {/* Section: Info Rapat */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-cyan-400 inline-block" />
@@ -369,6 +379,7 @@ export default function TambahNotulen() {
             </div>
           </div>
 
+          {/* Section: Voice Recording */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-red-400 inline-block" />
@@ -425,6 +436,7 @@ export default function TambahNotulen() {
             </div>
           </div>
 
+          {/* Section: Isi Notulen */}
           <div className="card-futuristic rounded-xl p-6 animate-fade-up">
             <h2 className="font-display text-lg font-semibold text-cyan-300 tracking-wider mb-5 flex items-center gap-2">
               <span className="w-1 h-5 rounded bg-green-400 inline-block" />
