@@ -4,7 +4,7 @@ import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '10mb', // Disesuaikan ke batas optimal Vercel agar tidak memicu error serverless
+      sizeLimit: '10mb', // Optimal untuk Vercel Serverless agar tidak memicu error payload
     },
   },
 };
@@ -77,9 +77,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log(`🔄 Mengupdate Data Notulen ID: ${body.id}`);
       const cleanedBody = cleanObjectData(body);
       
-      // PASTIKAN: Fungsi saveNotulen di lib/sheets harus mampu melakukan pencarian baris berdasarkan ID
-      // dan melakukan .save() / .update() pada baris tersebut, BUKAN menambahkan baris baru.
+      // CATATAN KRITIS: Pastikan fungsi saveNotulen di lib/sheets mampu mendeteksi 'id' 
+      // dan melakukan operasi UPDATE baris, bukan ADD ROW.
       const saved = await saveNotulen(cleanedBody);
+      
       return res.status(200).json(saved || cleanedBody);
     }
 
@@ -95,7 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   } catch (error: any) {
     console.error('❌ [CRITICAL SYSTEM ERROR]:', error);
-    // Mengembalikan detail error langsung agar Vercel Console menangkap masalah aslinya
+    // Mengembalikan JSON terstruktur agar Vercel tidak melempar 500 HTML mentah
     return res.status(500).json({ 
       error: 'Gagal memproses data ke database (Google Sheets)', 
       details: error.message || error.toString() 
