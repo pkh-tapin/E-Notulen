@@ -38,65 +38,61 @@ export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   
-  // SISTEM PEMBERSIHAN & PROKSI DATA DINAMIS (ANTI CRASH AI)
-  const cleanData: any = {};
-  
-  SHEET_HEADERS.forEach(header => {
-    let value = data[header];
-    
-    if (value === undefined || value === null) {
-      cleanData[header] = '';
-      return;
-    }
+  const cleanData: any = { ...data };
 
-    // Jika AI mengembalikan array (misal daftar peserta/agenda), konversi ke string berpoin
-    if (Array.isArray(value)) {
-      value = value.join(', ');
-    } else if (typeof value === 'object') {
-      value = JSON.stringify(value);
-    }
+  // SISTEM PEMBERSIHAN & AUTO-HEALING JSON DINAMIS
+  for (const key in cleanData) {
+    if (typeof cleanData[key] === 'string') {
+      let val = cleanData[key];
 
-    if (typeof value === 'string') {
-      // Hapus asterisk markdown (*), jaga spasi dan enter tetap aman
-      let cleanedStr = value.replace(/\*/g, '').trim();
-      
-      // PROTEKSI LIMIT GOOGLE SHEETS (Maks 50,000 karakter per sel)
-      if (cleanedStr.length > 48000) {
-        cleanedStr = cleanedStr.substring(0, 48000) + '\n\n[Teks dipotong otomatis oleh sistem karena melebihi batas kapasitas sel Google Sheets]';
+      // Deteksi jika AI "kebocoran" mengirim JSON mentah (seperti di screenshot)
+      if (val.trim().startsWith('{') && val.trim().endsWith('}')) {
+        try {
+          // Bersihkan markdown jika ada, lalu parse
+          const parsed = JSON.parse(val.replace(/```json/gi, '').replace(/```/g, '').trim());
+          
+          // Auto-mapping berdasarkan key
+          if (key === 'isi_notulen' && parsed.isi_notulen) val = parsed.isi_notulen;
+          if (key === 'judul' && parsed.judul_saran) val = parsed.judul_saran;
+          if (key === 'kesimpulan' && parsed.kesimpulan) val = parsed.kesimpulan;
+          if (key === 'tindak_lanjut' && parsed.tindak_lanjut) val = parsed.tindak_lanjut;
+        } catch (e) {
+          // Abaikan jika bukan JSON valid, lanjutkan sebagai teks biasa
+        }
       }
-      cleanData[header] = cleanedStr;
-    } else {
-      cleanData[header] = String(value);
+
+      // Hapus asterisk markdown (*), potong string jika lebih dari 49,000 karakter (Batas Google Sheets 50k)
+      val = val.replace(/\*/g, '').trim();
+      if (val.length > 49000) {
+         val = val.substring(0, 49000) + '\n\n[Dipotong otomatis: Melebihi batas sel database]';
+      }
+      cleanData[key] = val;
     }
-  });
+  }
   
   cleanData.status = cleanData.status || 'draft';
   cleanData.updated_at = new Date().toISOString();
 
-  // MODE UPDATE: JIKA ID SUDAH ADA
+  // MODE UPDATE
   if (cleanData.id) {
     const rows = await sheet.getRows();
     const row = rows.find((r: any) => r.get('id') === cleanData.id);
     if (row) {
-      // Solusi update mutlak yang aman untuk semua versi google-spreadsheet
       SHEET_HEADERS.forEach(header => {
-        try {
+        if (cleanData[header] !== undefined) {
           if (typeof row.set === 'function') {
-            row.set(header, cleanData[header]);
+            row.set(header, cleanData[header]); 
           } else {
-            row[header] = cleanData[header];
+            row[header] = cleanData[header]; 
           }
-        } catch (e) {
-          row[header] = cleanData[header];
         }
       });
-      
       await row.save();
       return cleanData;
     }
   }
   
-  // MODE CREATE: JIKA DATA BARU
+  // MODE CREATE
   cleanData.id = cleanData.id || `NTL-${Date.now()}`;
   cleanData.created_at = cleanData.created_at || new Date().toISOString();
   
