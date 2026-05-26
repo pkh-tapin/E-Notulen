@@ -38,31 +38,56 @@ export async function saveNotulen(data: any) {
   const doc = await getDoc();
   const sheet = doc.sheetsByTitle['Notulen'] || await doc.addSheet({ title: 'Notulen', headerValues: SHEET_HEADERS });
   
-  // SISTEM PEMBERSIHAN DINAMIS
-  const cleanData: any = { ...data };
-  for (const key in cleanData) {
-    if (typeof cleanData[key] === 'string') {
-      // Hanya menghapus bintang markdown (*), spasi & enter (\n) tetap aman
-      cleanData[key] = cleanData[key].replace(/\*/g, '').trim();
+  // SISTEM PEMBERSIHAN & PROKSI DATA DINAMIS (ANTI CRASH AI)
+  const cleanData: any = {};
+  
+  SHEET_HEADERS.forEach(header => {
+    let value = data[header];
+    
+    if (value === undefined || value === null) {
+      cleanData[header] = '';
+      return;
     }
-  }
+
+    // Jika AI mengembalikan array (misal daftar peserta/agenda), konversi ke string berpoin
+    if (Array.isArray(value)) {
+      value = value.join(', ');
+    } else if (typeof value === 'object') {
+      value = JSON.stringify(value);
+    }
+
+    if (typeof value === 'string') {
+      // Hapus asterisk markdown (*), jaga spasi dan enter tetap aman
+      let cleanedStr = value.replace(/\*/g, '').trim();
+      
+      // PROTEKSI LIMIT GOOGLE SHEETS (Maks 50,000 karakter per sel)
+      if (cleanedStr.length > 48000) {
+        cleanedStr = cleanedStr.substring(0, 48000) + '\n\n[Teks dipotong otomatis oleh sistem karena melebihi batas kapasitas sel Google Sheets]';
+      }
+      cleanData[header] = cleanedStr;
+    } else {
+      cleanData[header] = String(value);
+    }
+  });
   
   cleanData.status = cleanData.status || 'draft';
   cleanData.updated_at = new Date().toISOString();
 
-  // MODE UPDATE: JIKA ID SUDAH ADA (Misal AI dipanggil setelah data di-draft)
+  // MODE UPDATE: JIKA ID SUDAH ADA
   if (cleanData.id) {
     const rows = await sheet.getRows();
     const row = rows.find((r: any) => r.get('id') === cleanData.id);
     if (row) {
-      // FIX MUTLAK: Memaksa update sel satu per satu secara langsung (Support semua versi library)
+      // Solusi update mutlak yang aman untuk semua versi google-spreadsheet
       SHEET_HEADERS.forEach(header => {
-        if (cleanData[header] !== undefined) {
+        try {
           if (typeof row.set === 'function') {
-            row.set(header, cleanData[header]); // Library v4
+            row.set(header, cleanData[header]);
           } else {
-            row[header] = cleanData[header]; // Library v3
+            row[header] = cleanData[header];
           }
+        } catch (e) {
+          row[header] = cleanData[header];
         }
       });
       
