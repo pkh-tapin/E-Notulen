@@ -27,43 +27,122 @@ export default function DetailNotulen() {
   }, [id]);
 
   // =========================================================================
-  // SISTEM EXPORT PDF (ZERO-CONFIG & ANTI-ERROR)
+  // PERBAIKAN EXPORT PDF: Format Resmi Instansi Latar Putih & Anti Error
   // =========================================================================
   const handleDownloadPDF = () => {
-    const element = document.getElementById('pdf-content');
-    if (!element) {
-      alert('Gagal: Konten notulen tidak ditemukan.');
-      return;
-    }
-
+    if (!data) return;
     setIsPdfLoading(true);
 
+    // Membuat elemen HTML tersembunyi berformat laporan dinas
+    const reportContainer = document.createElement('div');
+    reportContainer.style.position = 'fixed';
+    reportContainer.style.left = '-9999px';
+    reportContainer.style.top = '-9999px';
+    reportContainer.innerHTML = `
+      <div id="print-official-pdf" style="padding: 20mm 15mm; font-family: 'Times New Roman', Times, serif; color: #000; background: #fff; line-height: 1.5; font-size: 12pt;">
+        
+        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 10px; margin-bottom: 20px;">
+          <h2 style="margin: 0; font-size: 16pt; font-weight: bold; text-transform: uppercase;">LAPORAN NOTULEN RAPAT</h2>
+          <p style="margin: 5px 0 0 0; font-size: 11pt;">Sistem Dokumentasi Arsip Digital Terpadu</p>
+        </div>
+
+        <h3 style="text-align: center; margin-bottom: 25px; text-transform: uppercase; font-size: 14pt;">${data.judul || 'Dokumen Rapat'}</h3>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11pt;">
+          <tr>
+            <td style="width: 25%; font-weight: bold; padding: 4px 0; vertical-align: top;">Tanggal</td>
+            <td style="width: 3%; vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top;">${data.tanggal || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 4px 0; vertical-align: top;">Waktu</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top;">${data.waktu_mulai || '-'} s.d. ${data.waktu_selesai || 'Selesai'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 4px 0; vertical-align: top;">Tempat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top;">${data.tempat || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 4px 0; vertical-align: top;">Pimpinan Rapat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top;">${data.pimpinan_rapat || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 4px 0; vertical-align: top;">Notulis</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top;">${data.notulis || '-'}</td>
+          </tr>
+          <tr>
+            <td style="font-weight: bold; padding: 4px 0; vertical-align: top;">Peserta Rapat</td>
+            <td style="vertical-align: top;">:</td>
+            <td style="padding: 4px 0; vertical-align: top; white-space: pre-wrap;">${data.peserta || '-'}</td>
+          </tr>
+        </table>
+
+        <div style="margin-bottom: 20px;">
+          <h4 style="font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 8px;">I. AGENDA RAPAT</h4>
+          <p style="margin: 0; white-space: pre-wrap; text-align: justify; padding-left: 15px;">${data.agenda || '-'}</p>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h4 style="font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 8px;">II. JALANNYA RAPAT / PEMBAHASAN</h4>
+          <div style="margin: 0; white-space: pre-wrap; text-align: justify; padding-left: 15px;">${data.isi_notulen || '-'}</div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h4 style="font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 8px;">III. KESIMPULAN</h4>
+          <p style="margin: 0; white-space: pre-wrap; text-align: justify; padding-left: 15px;">${data.kesimpulan || '-'}</p>
+        </div>
+
+        <div style="margin-bottom: 40px;">
+          <h4 style="font-weight: bold; text-transform: uppercase; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 8px;">IV. TINDAK LANJUT</h4>
+          <p style="margin: 0; white-space: pre-wrap; font-family: monospace; padding-left: 15px;">${data.tindak_lanjut || '-'}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-top: 30px;">
+          <tr>
+            <td style="width: 50%; text-align: center; padding-bottom: 70px;">Pimpinan Rapat,</td>
+            <td style="width: 50%; text-align: center; padding-bottom: 70px;">Notulis,</td>
+          </tr>
+          <tr>
+            <td style="text-align: center; font-weight: bold; text-decoration: underline;">( ${data.pimpinan_rapat || '........................'} )</td>
+            <td style="text-align: center; font-weight: bold; text-decoration: underline;">( ${data.notulis || '........................'} )</td>
+          </tr>
+        </table>
+      </div>
+    `;
+
+    document.body.appendChild(reportContainer);
+
     const opt = {
-      margin:       10,
-      filename:     `Notulen_${data?.tanggal || 'Rapat'}.pdf`,
+      margin:       0,
+      filename:     `Laporan_Notulen_${data?.tanggal || 'Rapat'}.pdf`,
       image:        { type: 'jpeg', quality: 1 },
-      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#020818' },
+      html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
-    const generatePDF = () => {
-      (window as any).html2pdf().set(opt).from(element).save().then(() => {
+    const processExport = () => {
+      (window as any).html2pdf().set(opt).from(document.getElementById('print-official-pdf')).save().then(() => {
         setIsPdfLoading(false);
+        document.body.removeChild(reportContainer);
       }).catch((err: any) => {
         console.error("PDF Error:", err);
         alert("Terjadi kesalahan saat memproses PDF.");
         setIsPdfLoading(false);
+        document.body.removeChild(reportContainer);
       });
     };
 
-    // Inject Library secara dinamis agar tidak perlu npm install
     if (!(window as any).html2pdf) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      script.onload = generatePDF;
+      script.onload = processExport;
       document.head.appendChild(script);
     } else {
-      generatePDF();
+      processExport();
     }
   };
 
@@ -138,7 +217,7 @@ export default function DetailNotulen() {
                 {isPdfLoading ? (
                   <><span className="animate-spin text-lg">⏳</span> Memproses...</>
                 ) : (
-                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> <span className="hidden md:inline">Download PDF</span><span className="md:hidden">PDF</span></>
+                  <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg> <span className="hidden md:inline">Download PDF Resmi</span><span className="md:hidden">PDF</span></>
                 )}
               </button>
             </div>
@@ -146,11 +225,10 @@ export default function DetailNotulen() {
         </nav>
 
         {/* ========================================================================= */}
-        {/* KONTEN DOKUMEN (AREA INI YANG AKAN DI-EXPORT MENJADI PDF) */}
+        {/* TAMPILAN LAYAR APLIKASI (TETAP GLASSMORPHISM & TEMA GELAP) */}
         {/* ========================================================================= */}
-        <div id="pdf-content" className="w-full max-w-5xl mx-auto px-6 py-10 space-y-6">
+        <div className="w-full max-w-5xl mx-auto px-6 py-10 space-y-6">
           
-          {/* Header Informasi PDF */}
           <div className="rounded-xl p-8 backdrop-blur-lg bg-[#040d2b]/80 border border-cyan-900/60 shadow-[0_0_20px_rgba(34,211,238,0.08)] relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-3xl"></div>
             
@@ -187,7 +265,6 @@ export default function DetailNotulen() {
             )}
           </div>
 
-          {/* Isi Notulen AI */}
           <div className="rounded-xl p-8 backdrop-blur-lg bg-[#040d2b]/80 border border-cyan-900/60 shadow-[0_0_20px_rgba(34,211,238,0.08)] space-y-8">
             
             {data.agenda && (
