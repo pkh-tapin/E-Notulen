@@ -1,104 +1,124 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { processWithGemini, transcribeAudio } from '../../lib/ai';
-
-// =========================================================================
-// PERBAIKAN MUTLAK 1: ANTI-TIMEOUT VERCEL
-// Mencegah Vercel memotong proses AI yang menghasilkan teks mentah "Error..."
-// =========================================================================
-export const maxDuration = 60;
+import { getAllNotulen, getNotulenByDate, saveNotulen, deleteNotulen } from '../../lib/sheets';
 
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: '50mb', // untuk file audio besar
+      sizeLimit: '50mb', 
     },
   },
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Setup CORS agar tidak di-block oleh browser dengan header lengkap
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+// FILTER BAJA: Membersihkan nilai kosong dan menghapus karakter aneh yang membuat Google Sheets Error 500
+const cleanObjectData = (obj: any): any => {
+  if (!obj || typeof obj !== 'object') return obj;
+  const copy = Array.isArray(obj) ? [...obj] : { ...obj };
+  
+  for (const key in copy) {
+    if (copy[key] === undefined || copy[key] === null) {
+      copy[key] = ''; // Ganti semua yang kosong dengan string aman
+    } else if (typeof copy[key] === 'string') {
+      // Hapus karakter unicode tersembunyi yang sering merusak query Google Sheets
+      copy[key] = copy[key].replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '').trim();
+    } else if (typeof copy[key] === 'object') {
+      copy[key] = cleanObjectData(copy[key]); 
+    }
+  }
+  return copy;
+};
 
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // KEAMANAN BROWSER: CORS Headers Lengkap agar tidak di-block browser
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
+  // 🛡️ SOLUSI AMAN DATABASE: Memaksa body menjadi objek murni jika dikirim sebagai string mentah
+  let rawBody = req.body;
+  if (typeof rawBody === 'string' && rawBody.trim() !== '') {
+    try {
+      rawBody = JSON.parse(rawBody);
+    } catch (parseErr) {
+      console.error("⚠️ Gagal otomatis mengubah string body ke JSON:", parseErr);
+    }
+  }
+
+  try {
+    // =========================================================================
+    // METHOD GET: AMBIL DATA
+    // =========================================================================
+    if (req.method === 'GET') {
+      const { id, date } = req.query;
+
+      if (id) {
+        const data = await getAllNotulen();
+        const item = data.find((d: any) => String(d.id) === String(id));
+        if (!item) return res.status(404).json({ error: 'Data notulen tidak ditemukan' });
+        return res.status(200).json(item);
+      }
+
+      if (date) {
+        const data = await getNotulenByDate(date as string);
+        return res.status(200).json(data);
+      }
+
+      const allData = await getAllNotulen();
+      return res.status(200).json(allData);
+    }
+
+    // =========================================================================
+    // METHOD POST: SIMPAN DATA BARU
+    // =========================================================================
+    if (req.method === 'POST') {
+      console.log('📥 Menerima Data Baru untuk Disimpan ke Spreadsheet');
+      
+      const cleanedBody = cleanObjectData(rawBody);
+      const saved = await saveNotulen(cleanedBody);
+      
+      // Jaga-jaga jika sheets API tidak mengembalikan ID baru secara langsung
+      const responseData = saved && saved.id ? saved : { ...cleanedBody, id: saved?.id || cleanedBody.id || Date.now().toString() };
+      return res.status(201).json(responseData);
+    }
+
+    // =========================================================================
+    // METHOD PUT: UPDATE DATA NOTULEN
+    // =========================================================================
+    if (req.method === 'PUT') {
+      if (!rawBody || !rawBody.id) {
+        return res.status(400).json({ error: 'ID wajib diisi untuk melakukan pembaruan' });
+      }
+
+      console.log(`🔄 Mengupdate Data Notulen ID: ${rawBody.id}`);
+      const cleanedBody = cleanObjectData(rawBody);
+      const saved = await saveNotulen(cleanedBody);
+      
+      const responseData = saved && saved.id ? saved : cleanedBody;
+      return res.status(200).json(responseData);
+    }
+
+    // =========================================================================
+    // METHOD DELETE: HAPUS NOTULEN
+    // =========================================================================
+    if (req.method === 'DELETE') {
+      const { id } = req.query;
+      if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
+
+      console.log(`🗑️ Menghapus Notulen ID: ${id}`);
+      const ok = await deleteNotulen(id as string);
+      return res.status(200).json({ success: ok });
+    }
+
     return res.status(405).json({ error: 'Method tidak diizinkan' });
-  }
 
-  // Pengaman otomatis jika body masuk dalam bentuk string mentah
-  let body;
-  try {
-    body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-  } catch (e) {
-    body = req.body;
-  }
-
-  const { action } = req.query;
-
-  try {
-    // 1. Action untuk ubah Suara ke Teks
-    if (action === 'transcribe') {
-      const { audioBase64, mimeType } = body;
-      if (!audioBase64) {
-        return res.status(400).json({ error: 'Data audio diperlukan' });
-      }
-      const transcript = await transcribeAudio(audioBase64, mimeType || 'audio/webm');
-      return res.status(200).json({ transcript });
-    }
-
-    // 2. Action untuk merapikan Teks jadi Notulen
-    if (action === 'process') {
-      const { transcript, agenda, tempat, tanggal, pimpinan } = body;
-      if (!transcript) {
-        return res.status(400).json({ error: 'Transcript diperlukan' });
-      }
-      
-      // Panggil AI
-      let result = await processWithGemini(transcript, { agenda, tempat, tanggal, pimpinan });
-      
-      // =========================================================================
-      // PERBAIKAN MUTLAK 2: ANTI-HALUSINASI JSON GEMINI
-      // Memastikan output selalu JSON murni, JANGAN PERNAH melempar teks mentah!
-      // =========================================================================
-      if (typeof result === 'string') {
-        try {
-          let cleanJson = String(result).replace(/```json/gi, '').replace(/```/g, '').trim();
-          
-          if (!cleanJson.startsWith('{') && cleanJson.includes('{')) {
-            cleanJson = cleanJson.substring(cleanJson.indexOf('{'), cleanJson.lastIndexOf('}') + 1);
-          }
-
-          // Perbaikan jika AI terpotong di akhir
-          if (cleanJson.startsWith('{') && !cleanJson.endsWith('}')) {
-             cleanJson += '"}'; 
-          }
-          
-          const parsedResult = JSON.parse(cleanJson);
-          return res.status(200).json(parsedResult); 
-
-        } catch (parseError) {
-          console.error('❌ Gagal mem-parsing teks AI:', parseError);
-          // BACKUP CERDAS: Paksa bentuk jadi objek JSON agar frontend tidak crash membaca "Error"
-          return res.status(200).json({ 
-            judul: "Draft AI (Berhasil Ditangkap)",
-            isi_notulen: String(result).replace(/```json/gi, '').replace(/```/g, ''),
-            kesimpulan: "Sistem mengamankan format data AI agar tidak crash.",
-            tindak_lanjut: "-"
-          });
-        }
-      }
-
-      // Jika sukses dan sudah berbentuk objek, kembalikan objek yang sudah rapi
-      return res.status(200).json(result);
-    }
-
-    return res.status(400).json({ error: 'Action tidak valid. Gunakan: transcribe atau process' });
   } catch (error: any) {
-    console.error('❌ AI API Error:', error);
-    return res.status(500).json({ error: error.message || 'Terjadi kesalahan pada server AI' });
+    console.error('❌ [CRITICAL SYSTEM ERROR]:', error);
+    return res.status(500).json({ 
+      error: 'Gagal memproses data ke Spreadsheet',
+      details: error.message || 'Terjadi kesalahan sistem internal'
+    });
   }
 }
