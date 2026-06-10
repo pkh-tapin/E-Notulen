@@ -33,6 +33,7 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // [BLUEPRINT LOCKED] Menarik Data Edit
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen`)
@@ -58,6 +59,7 @@ export default function TambahNotulen() {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
+  // [BLUEPRINT LOCKED] Fungsi Perekam Audio
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -89,6 +91,7 @@ export default function TambahNotulen() {
     }
   };
 
+  // [BLUEPRINT LOCKED] Transkripsi Audio
   const processAudio = async (blob: Blob) => {
     setAiLoading(true);
     showToast('Memproses sinyal suara...');
@@ -116,6 +119,7 @@ export default function TambahNotulen() {
     }
   };
 
+  // [BLUEPRINT LOCKED] Proses AI Gemini/GPT
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt || typeof txt !== 'string' || !txt.trim()) return showToast('Teks rekaman masih kosong!');
@@ -157,6 +161,7 @@ export default function TambahNotulen() {
     }
   };
 
+  // [BLUEPRINT LOCKED] Simpan ke Firebase
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) return showToast('Judul & Tanggal Wajib Diisi!');
     setSaving(true);
@@ -290,6 +295,15 @@ export default function TambahNotulen() {
                       <i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
                       <input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all font-medium" />
                     </div>
+                  </div>
+                </div>
+
+                {/* PENAMBAHAN FITUR: PESERTA RAPAT */}
+                <div>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Peserta Rapat Hadir</label>
+                  <div className="relative">
+                    <i className="fa-solid fa-users absolute left-4 top-4 text-slate-400"></i>
+                    <textarea value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} rows={2} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all font-medium resize-none shadow-inner" placeholder="Masukkan daftar peserta yang hadir..." />
                   </div>
                 </div>
 
