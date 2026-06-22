@@ -128,10 +128,7 @@ export default function DashboardPremium() {
     }
   };
 
-  // =========================================================================
-  // ENGINE CETAK PDF (Blueprint Locked)
-  // =========================================================================
-// ENGINE CETAK PDF PREMIUM (AUTO-BOLD & AUTO-INDENT)
+// ENGINE CETAK PDF (AUTO-BOLD & ALENIA)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -148,14 +145,18 @@ export default function DashboardPremium() {
       
       return text.split('\n').filter(p => p.trim() !== '').map(p => {
         let cleanText = p.replace(/\*/g, '').trim();
-        // Logika Detektif: Jika berawalan angka (1., 2.) jadikan BOLD. Jika abjad (a., b.), geser ke kanan.
+        
+        // Detektif Pintar: Cari awalan "1." (Utama) atau "a." (Anak Poin)
         let isMainPoint = /^\d+\.\s/.test(cleanText);
         let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
         
-        let padding = isSubPoint ? '20px' : '0px';
+        // Aturan Visual: Poin Utama = Tebal & Spasi Atas | Anak Poin = Menjorok
+        let paddingLeft = isSubPoint ? '28px' : '0px';
         let fontWeight = isMainPoint ? 'bold' : 'normal';
+        let textTransform = isMainPoint ? 'uppercase' : 'none';
+        let marginTop = isMainPoint ? '14px' : '6px'; // Jarak agar tidak berdempetan
 
-        return `<div style="page-break-inside: avoid; margin-bottom: 8px; text-align: justify; line-height: 1.6; padding-left: ${padding}; font-weight: ${fontWeight};">${cleanText}</div>`;
+        return `<div style="page-break-inside: avoid; margin-top: ${marginTop}; margin-bottom: 4px; text-align: justify; line-height: 1.6; padding-left: ${paddingLeft}; font-weight: ${fontWeight}; text-transform: ${textTransform};">${cleanText}</div>`;
       }).join('');
     };
     
