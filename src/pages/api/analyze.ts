@@ -9,30 +9,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { text, agenda } = req.body;
     if (!text) return res.status(400).json({ error: 'Teks tidak boleh kosong' });
 
+    // PROMPT ZERO HALLUCINATION & FORMATTING KETAT
     const prompt = `Anda adalah Asisten Notulis Eksekutif yang SANGAT PATUH untuk SDM PKH Tapin.
-    Tugas Anda HANYALAH merapikan catatan mentah menjadi notulen resmi tanpa merubah atau mengurangi substansi asli sedikitpun.
+    Tugas Anda HANYALAH merapikan catatan mentah menjadi notulen resmi. PATOKAN MUTLAK ADALAH TEKS ASLI.
 
-    ATURAN MUTLAK KESETIAAN & FORMAT:
-    1. ZERO DATA LOSS: DILARANG KERAS membuang topik, nama, angka, atau detail sekecil apapun dari teks asli. JANGAN MENAMBAH OPINI. Hanya rapikan bahasanya dan hapus duplikasi.
-    2. HIERARKI KETAT (PENTING):
-       - Topik Utama WAJIB ditulis dengan angka standar (1., 2., 3.) dan HANYA BERUPA JUDUL SINGKAT/TOPIK.
-       - Penjelasan/Detail panjang WAJIB ditaruh di bawahnya menggunakan huruf abjad (a., b., c.).
-    3. ANTI SIMBOL: JANGAN PERNAH menggunakan simbol bintang (*), tebal (**), hashtag (#), atau peluru (•). 
-    4. KESIMPULAN & RTL: Buat sangat ringkas dan to the point menggunakan penomoran angka (1., 2.).
+    ATURAN MUTLAK KESETIAAN & FORMAT BARU (WAJIB DIIKUTI):
+    1. ANTI BERSPEKULASI (ZERO HALLUCINATION): DILARANG KERAS menambah opini, mengarang fakta, atau membuang data (angka, nama, masalah, keputusan) sekecil apapun dari teks asli. Hanya rapikan bahasanya dan hapus duplikasi kata yang berulang.
+    2. FORMAT POIN UTAMA (KAPITAL): 
+       - Gunakan angka standar (1., 2., 3.).
+       - WAJIB gunakan HURUF KAPITAL (BESAR) SELURUHNYA untuk judul poin utama.
+       - Contoh: "1. EVALUASI KINERJA LAPANGAN"
+    3. FORMAT ANAK POIN (MENJOROK/ALENIA):
+       - Gunakan huruf abjad kecil (a., b., c.).
+       - WAJIB beri awalan 4 spasi sebelum huruf agar teks menjorok ke dalam (alenia).
+       - Contoh: "    a. Seluruh SDM PKH diwajibkan..."
+    4. ANTI SIMBOL: JANGAN PERNAH menggunakan simbol bintang (*), tebal (**), hashtag (#), atau peluru (•). Hanya gunakan Angka, Spasi, dan Abjad.
+    5. KESIMPULAN & RTL: Buat sangat ringkas dan padat.
 
     Agenda: ${agenda || 'Pembahasan Umum'}
     Transkrip Mentah Rapat: 
     "${text}"
     
-    KEMBALIKAN DALAM FORMAT JSON ARRAY STRING:
+    KEMBALIKAN DALAM FORMAT JSON ARRAY STRING (PERHATIKAN SPASI PADA ANAK POIN):
     {
       "ringkasan": ["1. Kesimpulan satu", "2. Kesimpulan dua"],
       "poin_penting": [
-        "1. [JUDUL TOPIK PERTAMA]", 
-        "a. [Penjelasan detail topik pertama yang sudah dirapikan...]", 
-        "b. [Detail lainnya...]",
-        "2. [JUDUL TOPIK KEDUA]",
-        "a. [Penjelasan...]"
+        "1. [JUDUL TOPIK PERTAMA HURUF KAPITAL]", 
+        "    a. [Penjelasan detail topik pertama yang sudah dirapikan...]", 
+        "    b. [Detail penjelasan lainnya...]",
+        "2. [JUDUL TOPIK KEDUA HURUF KAPITAL]",
+        "    a. [Penjelasan...]"
       ],
       "tindak_lanjut": ["1. [Tindakan satu]", "2. [Tindakan dua]"]
     }`;
@@ -55,7 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       responseText = completion.choices[0].message.content || "";
     }
 
-    // PEMBERSIHAN MUTLAK DARI SIMBOL
+    // Ekstraksi dan Pembersihan Paksa Simbol Bintang
     responseText = responseText.replace(/\*/g, '').replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
     
     const aiStructured = JSON.parse(responseText);
