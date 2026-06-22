@@ -9,32 +9,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { text, agenda } = req.body;
     if (!text) return res.status(400).json({ error: 'Teks tidak boleh kosong' });
 
-    // PROMPT DENGAN KALIBRASI HIERARKI KETAT (ANGKA -> ABJAD)
-    const prompt = `Anda adalah Asisten Notulis Eksekutif untuk SDM PKH Tapin.
-    Tugas Anda: Menganalisa mendalam, mengkategorikan topik, menghilangkan kalimat berulang, dan menyusun transkrip mentah menjadi laporan formal.
+    // PROMPT KETAT: HIGH FIDELITY (KESETIAAN MUTLAK PADA TEKS ASLI)
+    const prompt = `Anda adalah Asisten Notulis Eksekutif yang SANGAT PATUH untuk SDM PKH Tapin.
+    Tugas Anda HANYALAH merapikan catatan mentah/transkrip lisan menjadi notulen resmi tanpa merubah substansi asli sedikitpun.
 
-    ATURAN STRUKTUR HIERARKI MUTLAK (WAJIB DIPATUHI):
-    1. POIN UTAMA: Gunakan penomoran angka standar biasa (Contoh: 1., 2., 3.) untuk setiap topik atau pembahasan besar.
-    2. POIN TURUNAN (ANAK POIN): Jika poin utama memiliki detail, penjelasan, atau rincian di bawahnya, gunakan penomoran huruf abjad kecil bertingkat (Contoh: a., b., c.).
-    3. LARANGAN SIMBOL: DILARANG KERAS menggunakan simbol asterisk/bintang (*), tebal (**), hashtag (#), strip (-), atau peluru bulat (•). Semua daftar harus berupa kombinasi Angka dan Huruf Abjad agar rapi.
-    4. KESIMPULAN EKSEKUTIF: Wajib dibuat ringkas, padat, berupa poin penomoran angka murni (1., 2., 3.) yang langsung merangkum inti keputusan rapat.
+    ATURAN MUTLAK (JIKA DILANGGAR ANDA GAGAL):
+    1. KESETIAAN PADA DATA ASLI (ZERO DATA LOSS): DILARANG KERAS membuang, mengarang, atau menghilangkan poin/topik sekecil apapun dari teks asli. Semua nama, angka, lokasi, masalah, dan keputusan WAJIB ADA.
+    2. HANYA MERAPIKAN: Tugas Anda hanya menghapus kalimat yang berulang (duplikat), memperbaiki kata yang typo, dan mengubah bahasa lisan yang berantakan menjadi kalimat bahasa Indonesia baku (EYD) yang mudah dibaca. JANGAN menambah informasi dari luar teks.
+    3. KESIMPULAN & TINDAK LANJUT: Ringkasan WAJIB dibuat sangat padat, singkat, dan *to the point*. Tindak lanjut harus murni diambil dari rencana/instruksi yang ada di dalam teks asli (jangan mengarang tugas baru).
+    4. STRUKTUR HIERARKI ANGKA & ABJAD:
+       - Topik utama gunakan nomor angka standar (1., 2., 3.).
+       - Penjelasan/rincian di bawah topik utama gunakan huruf abjad kecil (a., b., c.).
+    5. ANTI SIMBOL: JANGAN PERNAH menggunakan simbol bintang (*), tebal (**), hashtag (#), strip (-), atau peluru (•) di bagian manapun.
 
     Agenda Kegiatan: ${agenda || 'Pembahasan Umum'}
-    Transkrip Mentah Rapat: "${text}"
+    Transkrip Mentah Rapat (Ini adalah acuan SATU-SATUNYA): 
+    "${text}"
     
-    KEMBALIKAN JAWABAN DALAM FORMAT JSON MURNI BERIKUT (TANPA MARKDOWN):
+    KEMBALIKAN DALAM FORMAT JSON MURNI BERIKUT:
     {
       "ringkasan": [
-        "1. [Kesimpulan ringkas poin kesatu]",
-        "2. [Kesimpulan ringkas poin kedua]"
+        "1. [Kesimpulan sangat padat dan singkat dari topik pertama]",
+        "2. [Kesimpulan sangat padat dari topik lainnya]"
       ],
       "poin_penting": [
-        "1. Pembahasan Mengenai Regulasi Baru\na. Detail rincian pertama tanpa menggunakan simbol bintang\nb. Detail rincian kedua yang memperjelas poin utama",
-        "2. Evaluasi Kinerja Lapangan\na. Detail rincian evaluasi pertama\nb. Detail rincian evaluasi kedua"
+        "1. [Nama Topik Pertama Sesuai Teks Asli]\na. [Isi penjelasan topik yang sudah dirapikan bahasanya]\nb. [Isi penjelasan lainnya tanpa ada yang dibuang]",
+        "2. [Nama Topik Kedua]\na. [Penjelasan...]"
       ],
       "tindak_lanjut": [
-        "1. [Rencana tindakan kesatu]\na. Penanggung jawab atau timeline detail",
-        "2. [Rencana tindakan kedua]"
+        "1. [Tindakan spesifik yang disebutkan di teks asli]",
+        "2. [Tindakan lainnya]"
       ]
     }`;
 
@@ -62,7 +66,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       responseText = completion.choices[0].message.content || "";
     }
 
-    // Pembersihan total dari sisa-sisa karakter nakal jika AI melakukan kesalahan
+    // PEMBERSIHAN OTOMATIS: Membunuh semua simbol Markdown jika AI membangkang
     responseText = responseText.replace(/\*/g, '').replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
     
     const aiStructured = JSON.parse(responseText);
