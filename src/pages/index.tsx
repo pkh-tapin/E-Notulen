@@ -132,15 +132,16 @@ export default function DashboardPremium() {
   // ENGINE CETAK PDF (Blueprint Locked)
   // =========================================================================
 // ENGINE CETAK PDF PREMIUM (ANTI-CUTTING / LENGKAP TANPA TERPOTONG)
-  const handleCetakPDF = async (item: Notulen) => {
+ const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
     printContainer.style.position = 'fixed';
     printContainer.style.left = '-9999px';
     printContainer.style.top = '-9999px';
     
+    // PERBAIKAN PDF: Memaksa teks membungkus (word-wrap) dan membiarkan halaman terbelah otomatis
     printContainer.innerHTML = `
-      <div id="print-capture-area" style="padding: 20mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; line-height: 1.6; font-size: 11pt; width: 210mm; box-sizing: border-box;">
+      <div id="print-capture-area" style="padding: 15mm 20mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; line-height: 1.6; font-size: 11pt; width: 210mm; box-sizing: border-box;">
 
         <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px; display: block;">
           <h1 style="margin: 0; font-size: 15pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
@@ -148,7 +149,7 @@ export default function DashboardPremium() {
           <p style="margin: 4px 0 0 0; font-size: 11pt; font-weight: bold;">KABUPATEN TAPIN</p>
         </div>
 
-        <div style="margin-bottom: 22px; display: block; page-break-inside: avoid;">
+        <div style="margin-bottom: 22px; display: block;">
           <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; text-transform: uppercase;">I. Pembukaan & Identitas Rapat</h3>
           <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
             <tr><td style="width: 28%; padding: 4px 0; font-weight: bold; vertical-align: top;">Judul Kegiatan</td><td style="width: 3%; vertical-align: top;">:</td><td style="padding: 4px 0; font-weight: bold;">${item.judul || '-'}</td></tr>
@@ -163,18 +164,18 @@ export default function DashboardPremium() {
         </div>
 
         <div style="margin-bottom: 22px; display: block;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; text-transform: uppercase; page-break-inside: avoid;">II. Hasil Pembahasan / Notulensi</h3>
-          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify; font-size: 11pt; line-height: 1.6; display: block;">${item.isi_notulen || '-'}</div>
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; text-transform: uppercase;">II. Hasil Pembahasan / Notulensi</h3>
+          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; word-wrap: break-word; text-align: justify; font-size: 11pt; line-height: 1.6; display: block;">${item.isi_notulen || '-'}</div>
         </div>
 
-        <div style="margin-bottom: 22px; display: block; page-break-inside: avoid;">
+        <div style="margin-bottom: 22px; display: block;">
           <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #ef4444; margin-bottom: 10px; text-transform: uppercase;">III. Kesimpulan Eksekutif</h3>
-          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-weight: bold; text-align: justify; white-space: pre-wrap; line-height: 1.5;">${item.kesimpulan || item.ai_structured?.ringkasan || '-'}</div>
+          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-weight: bold; text-align: justify; white-space: pre-wrap; word-wrap: break-word; line-height: 1.5; display: block;">${item.kesimpulan || item.ai_structured?.ringkasan || '-'}</div>
         </div>
 
         <div style="margin-bottom: 30px; display: block;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #0f172a; margin-bottom: 10px; text-transform: uppercase; page-break-inside: avoid;">IV. Rencana Tindak Lanjut (RTL)</h3>
-          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify; font-size: 11pt; line-height: 1.5; display: block;">${item.tindak_lanjut || item.ai_structured?.tindak_lanjut || '-'}</div>
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #0f172a; margin-bottom: 10px; text-transform: uppercase;">IV. Rencana Tindak Lanjut (RTL)</h3>
+          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; word-wrap: break-word; text-align: justify; font-size: 11pt; line-height: 1.5; display: block;">${item.tindak_lanjut || item.ai_structured?.tindak_lanjut || '-'}</div>
         </div>
 
         <div style="margin-top: 50px; text-align: right; display: block; page-break-inside: avoid;">
@@ -190,12 +191,14 @@ export default function DashboardPremium() {
     document.body.appendChild(printContainer);
 
     const filename = `NOTULEN_${item.tanggal}_${item.id.substring(0,5)}.pdf`;
+    
+    // KONFIGURASI PDF MULTI HALAMAN MURNI
     const opt = {
-      margin: [15, 15, 20, 15],
+      margin: [10, 0, 10, 0], 
       filename: filename,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: { scale: 2, useCORS: true },
+      pagebreak: { mode: ['css'] }, // Menghapus "avoid-all" agar teks panjang tidak terpotong
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
