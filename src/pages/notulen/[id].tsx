@@ -40,11 +40,19 @@ export default function LaporanResmi() {
 
   // ALGORITMA PEMISAH PARAGRAF ANTI-CUTTING
   // Ini akan membelah teks per poin (Enter) dan memberinya pelindung
+// ALGORITMA AUTO-FORMATTER TINGKAT DEWA
   const formatUntukPDF = (text?: string) => {
-    if (!text) return '<div style="margin-bottom: 8px;">Tidak ada catatan.</div>';
-    return text.split('\n').filter(p => p.trim() !== '').map(p => 
-      `<div style="page-break-inside: avoid; margin-bottom: 12px; text-align: justify; line-height: 1.6;">${p.replace(/\*/g, '')}</div>`
-    ).join('');
+    if (!text) return '<div style="margin-bottom: 8px;">-</div>';
+    return text.split('\n').filter(p => p.trim() !== '').map(p => {
+      let cleanText = p.replace(/\*/g, '').trim();
+      let isMainPoint = /^\d+\.\s/.test(cleanText);
+      let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
+      
+      let padding = isSubPoint ? '20px' : '0px';
+      let fontWeight = isMainPoint ? 'bold' : 'normal';
+
+      return `<div style="page-break-inside: avoid; margin-bottom: 8px; text-align: justify; line-height: 1.6; padding-left: ${padding}; font-weight: ${fontWeight};">${cleanText}</div>`;
+    }).join('');
   };
 
   const generatePDF = async () => {
