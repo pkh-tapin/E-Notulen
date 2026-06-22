@@ -4,20 +4,9 @@ import Head from 'next/head';
 import Link from 'next/link';
 
 interface NotulenData {
-  id?: string;
-  judul: string;
-  tanggal: string;
-  waktu_mulai: string;
-  waktu_selesai: string;
-  tempat: string;
-  pimpinan_rapat: string;
-  notulis: string;
-  peserta: string;
-  agenda: string;
-  isi_notulen: string;
-  kesimpulan: string;
-  tindak_lanjut: string;
-  status: string;
+  id?: string; judul: string; tanggal: string; waktu_mulai: string; waktu_selesai: string;
+  tempat: string; pimpinan_rapat: string; notulis: string; peserta: string;
+  agenda: string; isi_notulen: string; kesimpulan: string; tindak_lanjut: string; status: string;
 }
 
 export default function LaporanResmi() {
@@ -27,16 +16,23 @@ export default function LaporanResmi() {
   const [loading, setLoading] = useState(true);
   const [printing, setPrinting] = useState(false);
 
+  // Perlindungan Peran Admin (Vault Guard)
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
   useEffect(() => {
     if (id) {
-      fetch(`/api/notulen?id=${id}`)
+      fetch(`/api/notulen`)
         .then(res => res.json())
         .then(result => {
           if (Array.isArray(result)) {
             const found = result.find((item: any) => item.id === id);
             setData(found || null);
-          } else {
-            setData(result.error ? null : result);
+            // Jika dokumen publik, otomatis buka gembok akses
+            if (found && found.status !== 'rahasia') {
+              setIsUnlocked(true);
+            }
           }
           setLoading(false);
         })
@@ -44,6 +40,18 @@ export default function LaporanResmi() {
     }
   }, [id]);
 
+  const handleVerifyPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinInput === '1234') {
+      setIsUnlocked(true);
+      setPinError('');
+    } else {
+      setPinError('Akses Ditolak: PIN Salah!');
+      setPinInput('');
+    }
+  };
+
+  // ENGINE CETAK LENGKAP TANPA TERPOTONG (ANTI-CLIPPING MULTIPAGE)
   const generatePDF = async () => {
     if (!data) return;
     setPrinting(true);
@@ -52,10 +60,12 @@ export default function LaporanResmi() {
     if (!printArea) return;
 
     const opt = {
-      margin: [15, 15, 15, 15],
-      filename: `LAPORAN_NOTULEN_${data.tanggal.replace(/-/g, '')}.pdf`,
+      margin: [15, 15, 20, 15], // Margin atas, kiri, bawah, kanan
+      filename: `LAPORAN_NOTULEN_${data.tanggal}_${data.judul.substring(0,10)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      // Mengaktifkan sistem pembagian halaman pintar html2pdf
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -63,7 +73,7 @@ export default function LaporanResmi() {
       try {
         await (window as any).html2pdf().set(opt).from(printArea).save();
       } catch (err) {
-        console.error("Gagal mencetak PDF", err);
+        console.error("Gagal cetak PDF:", err);
       } finally {
         setPrinting(false);
       }
@@ -81,10 +91,10 @@ export default function LaporanResmi() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f8fafc]">
-        <div className="animate-pulse flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-slate-500 font-bold tracking-widest text-xs uppercase">Menarik Data Enkripsi...</p>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="flex flex-col items-center gap-2">
+          <i className="fa-solid fa-circle-notch fa-spin text-yellow-500 text-3xl"></i>
+          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest">Sinkronisasi Jalur Data...</p>
         </div>
       </div>
     );
@@ -92,10 +102,29 @@ export default function LaporanResmi() {
 
   if (!data) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc]">
-        <h1 className="text-2xl font-black text-slate-800 mb-2">404 - Dokumen Hilang</h1>
-        <p className="text-slate-500 mb-6">Arsip yang Anda cari tidak ditemukan di database utama.</p>
-        <Link href="/" className="px-6 py-2 bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-500/30">Kembali ke Dashboard</Link>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <h1 className="text-xl font-black text-slate-800 mb-2">404 — DATA DOKUMEN INVALID</h1>
+        <Link href="/" className="px-5 py-2 bg-yellow-400 text-yellow-950 font-bold rounded-xl text-xs">Dashboard</Link>
+      </div>
+    );
+  }
+
+  // JIKA DOKUMEN RAHASIA DAN BELUM DIREKONSILIASI PIN ADMIN
+  if (!isUnlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+        <div className="bg-white rounded-2xl p-6 shadow-xl border border-slate-200 w-full max-w-sm text-center">
+          <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4 text-yellow-600 text-2xl">
+            <i className="fa-solid fa-lock"></i>
+          </div>
+          <h2 className="text-base font-black text-slate-800 uppercase tracking-wide mb-1">Dokumen Tertutup (Admin Only)</h2>
+          <p className="text-slate-500 text-xs mb-6 leading-relaxed">Arsip ini berstatus RAHASIA. Masukkan PIN Otorisasi untuk membuka berkas.</p>
+          <form onSubmit={handleVerifyPin} className="space-y-3">
+            <input type="password" value={pinInput} onChange={e => setPinInput(e.target.value)} placeholder="••••" className="w-full text-center py-3 border border-slate-200 rounded-xl bg-slate-50 text-2xl tracking-[0.2em] outline-none focus:border-yellow-400 focus:bg-white font-mono" autoFocus />
+            {pinError && <p className="text-red-500 text-xs font-bold">{pinError}</p>}
+            <button type="submit" className="w-full py-3 bg-yellow-400 hover:bg-yellow-500 text-yellow-950 rounded-xl font-extrabold text-xs uppercase tracking-wider shadow-md">Verifikasi Akses</button>
+          </form>
+        </div>
       </div>
     );
   }
@@ -103,88 +132,84 @@ export default function LaporanResmi() {
   return (
     <>
       <Head>
-        <title>Laporan Resmi: {data.judul}</title>
+        <title>Laporan Kegiatan: {data.judul}</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       </Head>
 
-      <div className="min-h-screen bg-[#f8fafc] w-full text-slate-800 font-sans pb-12">
-        
-        {/* Navbar */}
-        <nav className="bg-white/80 backdrop-blur-lg border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm print:hidden">
-          <div className="w-full max-w-5xl mx-auto px-5 h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-3 text-slate-500 hover:text-orange-500 transition-colors font-bold text-xs uppercase tracking-widest">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              Kembali
+      <div className="min-h-screen bg-slate-50 w-full text-slate-800 pb-12">
+        {/* NAV BAR */}
+        <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm print:hidden">
+          <div className="w-full max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
+            <Link href="/" className="text-slate-600 hover:text-yellow-600 transition-colors font-bold text-xs uppercase flex items-center gap-2">
+              <i className="fa-solid fa-arrow-left"></i> Kembali
             </Link>
-            <button onClick={generatePDF} disabled={printing} className="px-5 py-2.5 rounded-xl text-xs font-bold uppercase transition-all bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-md shadow-orange-500/20 hover:shadow-orange-500/40 hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-2">
-              {printing ? 'Memproses PDF...' : '📥 Download Laporan PDF'}
+            <button onClick={generatePDF} disabled={printing} className="px-5 py-2.5 rounded-xl text-xs font-extrabold uppercase transition-all bg-yellow-400 hover:bg-yellow-500 text-yellow-950 shadow-md flex items-center gap-2">
+              {printing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-file-pdf"></i>}
+              {printing ? 'Menyusun PDF...' : 'Download Laporan PDF'}
             </button>
           </div>
         </nav>
 
-        {/* Kontainer Preview Laporan */}
-        <div className="w-full max-w-4xl mx-auto mt-8 px-4 print:p-0 print:m-0">
+        {/* CONTAINER PREVIEW */}
+        <div className="w-full max-w-3xl mx-auto mt-8 px-4 print:p-0">
           
-          {/* AREA CETAK PDF (Desain Dokumen Resmi) */}
-          <div id="formal-report-area" className="bg-white p-10 md:p-14 shadow-xl border border-slate-200 print:shadow-none print:border-none print:p-0">
+          {/* AREA FORMAL DOKUMEN ANTI-POTONG */}
+          <div id="formal-report-area" className="bg-white p-8 md:p-12 border border-slate-200 shadow-sm print:border-none print:p-0 print:shadow-none" style={{ color: '#000', fontFamily: 'Arial, sans-serif' }}>
             
-            {/* KOP SURAT (Otomatis disesuaikan untuk format resmi) */}
-            <div className="text-center border-b-[3px] border-double border-slate-800 pb-5 mb-8">
-              <h1 className="font-extrabold text-lg md:text-xl uppercase tracking-wider text-slate-900 leading-tight">
-                LAPORAN HASIL KEGIATAN & NOTULENSI
-              </h1>
-              <h2 className="font-bold text-sm md:text-base uppercase tracking-widest text-slate-700 mt-1">
-                SDM PROGRAM KELUARGA HARAPAN (PKH)
-              </h2>
-              <p className="font-semibold text-xs md:text-sm uppercase tracking-widest text-slate-600 mt-1">
-                KABUPATEN TAPIN
-              </p>
+            {/* KOP RESMI */}
+            <div style={{ text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px; display: block; }}>
+              <h1 style={{ margin: '0', fontSize: '15pt', fontWeight: 'bold', uppercase: 'true', letterSpacing: '0.5px' }}>LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
+              <h2 style={{ margin: '4px 0 0 0', fontSize: '12pt', fontWeight: 'bold', uppercase: 'true' }}>SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
+              <p style={{ margin: '4px 0 0 0', fontSize: '11pt', fontWeight: 'bold' }}>KABUPATEN TAPIN</p>
             </div>
 
-            {/* 1. PEMBUKAAN (Metadata) */}
-            <div className="mb-8">
-              <h3 className="font-bold text-sm text-slate-900 bg-slate-100 p-2 border-l-4 border-orange-500 uppercase tracking-widest mb-4">I. Pembukaan & Identitas Rapat</h3>
-              <table className="w-full text-sm text-slate-800">
+            {/* SECTION 1: PEMBUKAAN */}
+            <div style={{ marginBottom: '25px', display: 'block', pageBreakInside: 'avoid' }}>
+              <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #eab308', margin: '0 0 12px 0', textTransform: 'uppercase' }}>I. Pembukaan & Identitas Rapat</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11pt' }}>
                 <tbody>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Kegiatan / Judul</td><td className="py-2 w-4 align-top">:</td><td className="py-2 font-bold">{data.judul}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Hari, Tanggal</td><td className="py-2 w-4 align-top">:</td><td className="py-2">{data.tanggal}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Waktu</td><td className="py-2 w-4 align-top">:</td><td className="py-2">{data.waktu_mulai || '-'} s/d {data.waktu_selesai || 'Selesai'}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Lokasi / Tempat</td><td className="py-2 w-4 align-top">:</td><td className="py-2">{data.tempat || '-'}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Pimpinan Rapat</td><td className="py-2 w-4 align-top">:</td><td className="py-2">{data.pimpinan_rapat || '-'}</td></tr>
-                  <tr className="border-b border-slate-100"><td className="py-2 w-40 font-semibold align-top">Agenda Utama</td><td className="py-2 w-4 align-top">:</td><td className="py-2 whitespace-pre-wrap">{data.agenda || '-'}</td></tr>
+                  <tr><td style={{ width: '28%', padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Judul Kegiatan</td><td style={{ width: '3%', verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0', fontWeight: 'bold' }}>{data.judul}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Hari / Tanggal</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0' }}>{data.tanggal}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Waktu Kegiatan</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0' }}>{data.waktu_mulai || '-'} s/d {data.waktu_selesai || 'Selesai'}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Tempat Pelaksanaan</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0' }}>{data.tempat || '-'}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Pimpinan Sidang</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0' }}>{data.pimpinan_rapat || '-'}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Notulis / Pencatat</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0' }}>{data.notulis || '-'}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Daftar Peserta Hadir</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0', whiteSpace: 'pre-wrap' }}>{data.peserta || '-'}</td></tr>
+                  <tr><td style={{ padding: '5px 0', fontWeight: 'bold', verticalAlign: 'top' }}>Agenda Utama Rapat</td><td style={{ verticalAlign: 'top' }}>:</td><td style={{ padding: '5px 0', whiteSpace: 'pre-wrap' }}>{data.agenda || '-'}</td></tr>
                 </tbody>
               </table>
             </div>
 
-            {/* 2. PEMBAHASAN */}
-            <div className="mb-8">
-              <h3 className="font-bold text-sm text-slate-900 bg-slate-100 p-2 border-l-4 border-orange-500 uppercase tracking-widest mb-4">II. Hasil Pembahasan</h3>
-              <div className="text-sm text-slate-800 leading-loose text-justify whitespace-pre-wrap pl-2 border-l-2 border-slate-200">
-                {data.isi_notulen || 'Tidak ada catatan pembahasan.'}
+            {/* SECTION 2: PEMBAHASAN (MENDUKUNG MULTI-HALAMAN ALAMI) */}
+            <div style={{ marginBottom: '25px', display: 'block' }}>
+              <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #eab308', margin: '0 0 12px 0', textTransform: 'uppercase', pageBreakInside: 'avoid' }}>II. Hasil Pembahasan / Notulensi</h3>
+              <div style={{ fontSize: '11pt', lineHeight: '1.6', textAnign: 'justify', whiteSpace: 'pre-wrap', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', display: 'block' }}>
+                {data.isi_notulen || 'Tidak ada catatan isi pembahasan.'}
               </div>
             </div>
 
-            {/* 3. KESIMPULAN (Di-desain menonjol dan padat) */}
-            <div className="mb-8">
-              <h3 className="font-bold text-sm text-slate-900 bg-slate-100 p-2 border-l-4 border-red-500 uppercase tracking-widest mb-4">III. Kesimpulan Eksekutif</h3>
-              <div className="p-4 bg-orange-50/50 border border-orange-200 rounded-lg text-sm text-slate-900 font-semibold leading-relaxed text-justify shadow-inner">
-                {data.kesimpulan || 'Tidak ada kesimpulan yang dicatat.'}
+            {/* SECTION 3: KESIMPULAN (PADAT & MENONJOL) */}
+            <div style={{ marginBottom: '25px', display: 'block', pageBreakInside: 'avoid' }}>
+              <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #ef4444', margin: '0 0 12px 0', textTransform: 'uppercase' }}>III. Kesimpulan Eksekutif</h3>
+              <div style={{ fontSize: '11pt', padding: '12px', backgroundColor: '#fefce8', border: '1px solid #fef08a', borderRadius: '6px', fontWeight: 'bold', lineHeight: '1.5', textAlign: 'justify', whiteSpace: 'pre-wrap' }}>
+                {data.kesimpulan || 'Tidak ada data kesimpulan.'}
               </div>
             </div>
 
-            {/* 4. TINDAK LANJUT */}
-            <div className="mb-12">
-              <h3 className="font-bold text-sm text-slate-900 bg-slate-100 p-2 border-l-4 border-slate-800 uppercase tracking-widest mb-4">IV. Rencana Tindak Lanjut (RTL)</h3>
-              <div className="text-sm text-slate-800 leading-loose text-justify whitespace-pre-wrap pl-2 border-l-2 border-slate-200">
+            {/* SECTION 4: TINDAK LANJUT */}
+            <div style={{ marginBottom: '35px', display: 'block' }}>
+              <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #0f172a', margin: '0 0 12px 0', textTransform: 'uppercase', pageBreakInside: 'avoid' }}>IV. Rencana Tindak Lanjut (RTL)</h3>
+              <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify', whiteSpace: 'pre-wrap', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', display: 'block' }}>
                 {data.tindak_lanjut || '-'}
               </div>
             </div>
 
-            {/* KOLOM TANDA TANGAN */}
-            <div className="mt-16 flex justify-end">
-              <div className="text-center w-64">
-                <p className="text-sm text-slate-800 mb-20">Tapin, {data.tanggal}</p>
-                <p className="font-bold text-sm text-slate-900 border-b border-slate-800 inline-block pb-0.5">{data.pimpinan_rapat || '...........................................'}</p>
-                <p className="text-xs text-slate-600 mt-1">Pimpinan Rapat</p>
+            {/* SIGNATURE BLOCK */}
+            <div style={{ marginTop: '50px', textAlign: 'right', display: 'block', pageBreakInside: 'avoid' }}>
+              <div style={{ display: 'inline-block', textAnign: 'center', width: '240px', fontSize: '11pt' }}>
+                <p style={{ margin: '0 0 65px 0' }}>Tapin, {data.tanggal}</p>
+                <p style={{ margin: '0', fontWeight: 'bold', textDecoration: 'underline' }}>{data.pimpinan_rapat || '...........................................'}</p>
+                <p style={{ margin: '4px 0 0 0', fontSize: '10pt', color: '#475569' }}>Pimpinan Rapat</p>
               </div>
             </div>
 
