@@ -107,11 +107,11 @@ export default function TambahNotulen() {
 
       const aiOut = resData.data;
 
-      // Fungsi menyatukan array menjadi string dengan spasi ganda (enter) agar rapi
+      // HANYA MENGGABUNGKAN TEKS TANPA TRIM AGAR FORMAT INDENTASI TETAP AMAN
       const formatString = (val: any): string => {
         if (!val) return '';
-        if (typeof val === 'string') return val.trim();
-        if (Array.isArray(val)) return val.map(item => String(item).trim()).join('\n\n');
+        if (typeof val === 'string') return val.trimEnd();
+        if (Array.isArray(val)) return val.map(item => String(item).trimEnd()).join('\n');
         return String(val);
       };
 
@@ -153,10 +153,6 @@ export default function TambahNotulen() {
       <Head>
         <title>{`${isEdit ? 'Edit Notulen' : 'Catatan Baru'} — AI Note`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-        <style>{`
-          @keyframes slideUp { from { transform: translate(-50%, 100%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-          @keyframes pulseGlow { 0%, 100% { opacity: 1; text-shadow: 0 0 15px rgba(234,179,8,0.5); } 50% { opacity: 0.7; text-shadow: 0 0 5px rgba(234,179,8,0.2); } }
-        `}</style>
       </Head>
 
       <div className="min-h-screen bg-slate-50 w-full text-slate-800 font-sans pb-12 selection:bg-yellow-200">
@@ -174,12 +170,12 @@ export default function TambahNotulen() {
         <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm">
           <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3 sm:gap-4">
-              <Link href="/" className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-yellow-100 text-slate-500 hover:text-yellow-600 transition-colors"><i className="fa-solid fa-arrow-left"></i></Link>
+              <Link href="/" className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-yellow-100 text-slate-500 transition-colors"><i className="fa-solid fa-arrow-left"></i></Link>
               <h1 className="font-extrabold text-slate-800 text-xs sm:text-sm tracking-widest uppercase">{isEdit ? 'EDIT' : 'BUAT'} <span className="text-yellow-500">DOKUMEN</span></h1>
             </div>
             <div className="flex gap-2 sm:gap-3">
-              <button onClick={() => handleSave('draft')} disabled={saving} className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase transition-all bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-2"><i className="fa-solid fa-file-pen hidden sm:block"></i> Draft</button>
-              <button onClick={() => handleSave(form.status === 'rahasia' ? 'rahasia' : 'final')} disabled={saving} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase transition-all bg-yellow-400 text-yellow-950 shadow-md hover:bg-yellow-500 flex items-center gap-2">
+              <button onClick={() => handleSave('draft')} disabled={saving} className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-slate-100 hover:bg-slate-200 flex items-center gap-2"><i className="fa-solid fa-file-pen hidden sm:block"></i> Draft</button>
+              <button onClick={() => handleSave(form.status === 'rahasia' ? 'rahasia' : 'final')} disabled={saving} className="px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-yellow-400 text-yellow-950 shadow-md hover:bg-yellow-500 flex items-center gap-2">
                 {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
                 <span className="hidden sm:inline">{saving ? 'Menyimpan...' : 'Simpan Final'}</span>
                 <span className="sm:hidden">{saving ? '...' : 'Simpan'}</span>
@@ -192,24 +188,31 @@ export default function TambahNotulen() {
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>
-              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase flex items-center gap-2 border-b border-slate-100 pb-3"><i className="fa-solid fa-clipboard-list text-slate-400"></i> Identitas Rapat</h2>
+              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase border-b border-slate-100 pb-3 flex items-center gap-2"><i className="fa-solid fa-clipboard-list text-slate-400"></i> Identitas Rapat</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Judul Dokumen *</label>
-                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white" /></div>
+                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                {/* KOLOM JAM DIMUNCULKAN KEMBALI DI SINI */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Tanggal *</label><div className="relative"><i className="fa-regular fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="date" value={form.tanggal || ''} onChange={e => setField('tanggal', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
-                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Mulai</label><div className="relative"><i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="time" value={form.waktu_mulai || ''} onChange={e => setField('waktu_mulai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Selesai</label><div className="relative"><i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="time" value={form.waktu_selesai || ''} onChange={e => setField('waktu_selesai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                 </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2"><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi / Tempat</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                   <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Pimpinan Rapat</label><div className="relative"><i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.pimpinan_rapat || ''} onChange={e => setField('pimpinan_rapat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                   <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Notulis</label><div className="relative"><i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                 </div>
+
                 <div>
                   <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Peserta Hadir</label>
                   <div className="relative"><i className="fa-solid fa-users absolute left-4 top-4 text-slate-400"></i><textarea value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} rows={2} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" /></div>
                 </div>
+                
                 <div className="pt-2">
                   <label className="block text-[10px] uppercase font-bold tracking-widest mb-1.5 text-yellow-600"><i className="fa-solid fa-shield-halved"></i> Keamanan Dokumen</label>
                   <select value={form.status || 'draft'} onChange={e => setField('status', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400">
@@ -219,6 +222,7 @@ export default function TambahNotulen() {
                     <option value="rahasia" className="text-red-600 font-extrabold">🔒 RAHASIA (Hanya Admin Vault)</option>
                   </select>
                 </div>
+
                 <div>
                   <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Agenda Utama</label>
                   <textarea value={form.agenda || ''} onChange={e => setField('agenda', e.target.value)} rows={2} className="w-full px-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" />
@@ -253,8 +257,8 @@ export default function TambahNotulen() {
                   <div className="absolute inset-0 border-4 border-yellow-400 rounded-full animate-ping opacity-20"></div>
                   <div className="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-lg relative z-10"><i className="fa-solid fa-brain text-white text-3xl animate-pulse"></i></div>
                 </div>
-                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest mb-2" style={{ animation: 'pulseGlow 2s infinite' }}>Deep Analysis...</h3>
-                <p className="text-slate-600 text-sm font-medium text-center px-8">Kecerdasan Buatan sedang membuang duplikasi teks dan menyusunnya dalam poin rapi.</p>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest mb-2">Deep Analysis...</h3>
+                <p className="text-slate-600 text-sm font-medium text-center px-8">Menyusun poin secara struktural tanpa membuang data mentah.</p>
               </div>
             )}
             <div className={`bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm h-full transition-opacity ${aiLoading ? 'opacity-30' : 'opacity-100'}`}>
@@ -262,20 +266,19 @@ export default function TambahNotulen() {
               <div className="space-y-6">
                 <div>
                   <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-list-check text-yellow-500"></i> Poin Pembahasan Rapat</label>
-                  <textarea value={form.isi_notulen || ''} onChange={e => setField('isi_notulen', e.target.value)} rows={9} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-loose text-justify shadow-inner whitespace-pre-wrap" />
+                  <textarea value={form.isi_notulen || ''} onChange={e => setField('isi_notulen', e.target.value)} rows={12} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-loose shadow-inner whitespace-pre-wrap" />
                 </div>
                 <div>
                   <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-bolt text-yellow-500"></i> Kesimpulan Eksekutif</label>
-                  <textarea value={form.kesimpulan || ''} onChange={e => setField('kesimpulan', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-yellow-50/50 border border-yellow-200 focus:outline-none focus:border-yellow-400 leading-relaxed text-justify shadow-inner whitespace-pre-wrap font-medium" />
+                  <textarea value={form.kesimpulan || ''} onChange={e => setField('kesimpulan', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-yellow-50/50 border border-yellow-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap font-medium" />
                 </div>
                 <div>
                   <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-forward-step text-yellow-500"></i> Tindak Lanjut (RTL)</label>
-                  <textarea value={form.tindak_lanjut || ''} onChange={e => setField('tindak_lanjut', e.target.value)} rows={3} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-relaxed text-justify shadow-inner whitespace-pre-wrap" />
+                  <textarea value={form.tindak_lanjut || ''} onChange={e => setField('tindak_lanjut', e.target.value)} rows={3} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap" />
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </>
