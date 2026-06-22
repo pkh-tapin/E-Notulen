@@ -1,308 +1,72 @@
-import { useState, useRef, useEffect } from 'react';
-import Head from 'next/head';
-import Link from 'next/link';
-import { useRouter } from 'next/router';
+import { NextApiRequest, NextApiResponse } from 'next';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 
-interface FormData {
-  judul: string; tanggal: string; waktu_mulai: string; waktu_selesai: string;
-  tempat: string; pimpinan_rapat: string; notulis: string; peserta: string;
-  agenda: string; isi_notulen: string; kesimpulan: string; tindak_lanjut: string;
-  status: string; raw_transcript: string;
-}
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-export default function TambahNotulen() {
-  const router = useRouter();
-  const { edit } = router.query;
-  const editId = Array.isArray(edit) ? edit[0] : edit;
-  const isEdit = !!editId;
+  try {
+    const { text, agenda } = req.body;
+    if (!text) return res.status(400).json({ error: 'Teks tidak boleh kosong' });
 
-  const [form, setForm] = useState<FormData>({
-    judul: '', tanggal: '', waktu_mulai: '', waktu_selesai: '',
-    tempat: '', pimpinan_rapat: '', notulis: '', peserta: '',
-    agenda: '', isi_notulen: '', kesimpulan: '', tindak_lanjut: '',
-    status: 'draft', raw_transcript: ''
-  });
+    // PROMPT DOKTRIN KESETIAAN MUTLAK (NAMA TOKOH & ANTI BUANG DATA)
+    const prompt = `Anda adalah Asisten Notulis Eksekutif di SDM PKH Tapin. 
+    Tugas Anda: Merapikan catatan mentah/transkrip suara menjadi notulensi. PATOKAN MUTLAK ADALAH TEKS ASLI.
 
-  const [recording, setRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState('');
+    DOKTRIN KESETIAAN DATA (WAJIB DIPATUHI 100%):
+    1. HARGA MATI NAMA PEMATERI: JANGAN PERNAH menghapus nama orang! Jika teks asli menyebutkan "Bapak X menyampaikan..." atau "Ibu Y menanyakan...", Anda WAJIB MENCANTUMKAN nama Bapak/Ibu tersebut di dalam rincian Anda.
+    2. PENANGANAN PENDAPAT GANDA/SAMA: Jika ada tokoh yang menyampaikan hal yang sama/mirip, JANGAN DIBUANG. Tuliskan dengan rapi, contoh: "Sejalan dengan penyampaian Bapak A, Ibu B menegaskan kembali bahwa..."
+    3. DILARANG BERSPEKULASI: JANGAN menambahkan opini, kata-kata yang tidak ada konteksnya di teks asli, atau membuang data. Kunci pemahaman Anda sama persis dengan apa yang diketik/direkam.
+    4. TUGAS ANDA HANYA MERAPIKAN: Rapikan bahasa lisannya, perbaiki typo, dan perjelas kalimat yang rumpang tanpa keluar dari konteks.
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+    ATURAN FORMAT VISUAL (WAJIB DIIKUTI):
+    - POIN UTAMA (Angka): Gunakan (1., 2., 3.). WAJIB HURUF KAPITAL SEMUA untuk judul poinnya.
+    - ANAK POIN (Abjad): Gunakan (a., b., c.). WAJIB beri awalan 4 spasi (    a.) agar menjorok ke dalam (alenia).
+    - ANTI SIMBOL: Dilarang keras memakai bintang (*), tebal (**), hashtag (#), atau peluru (•).
+    - Kesimpulan & Tindak Lanjut dibuat sangat ringkas, padat, jelas menggunakan angka murni.
 
-  useEffect(() => {
-    if (editId) {
-      fetch(`/api/notulen`)
-        .then(r => r.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            const found = data.find((item: any) => item.id === editId);
-            if (found) setForm(found);
-          } else if (data && !data.error) {
-            setForm(data);
-          }
-        })
-        .catch(console.error);
+    Agenda: ${agenda || 'Pembahasan Umum'}
+    Transkrip Mentah Rapat: 
+    "${text}"
+    
+    KEMBALIKAN DALAM FORMAT JSON ARRAY STRING:
+    {
+      "ringkasan": ["1. Kesimpulan satu", "2. Kesimpulan dua"],
+      "poin_penting": [
+        "1. [JUDUL TOPIK PERTAMA HURUF KAPITAL]", 
+        "    a. Bapak X menyampaikan bahwa...", 
+        "    b. Ibu Y menambahkan terkait...",
+        "2. [JUDUL TOPIK KEDUA HURUF KAPITAL]",
+        "    a. [Penjelasan...]"
+      ],
+      "tindak_lanjut": ["1. [Tindakan satu]", "2. [Tindakan dua]"]
+    }`;
+
+    let responseText = "";
+
+    try {
+      if (!process.env.GEMINI_API_KEY) throw new Error("Key hilang");
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+      const result = await model.generateContent(prompt);
+      responseText = result.response.text();
+    } catch (geminiError: any) {
+      if (!process.env.OPENAI_API_KEY) throw new Error("Semua API mati.");
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+      });
+      responseText = completion.choices[0].message.content || "";
     }
-  }, [editId]);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 4000); };
-  const setField = (key: keyof FormData, val: string) => setForm(prev => ({ ...prev, [key]: val }));
+    // Pembersihan Karakter Nakal
+    responseText = responseText.replace(/\*/g, '').replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
+    
+    const aiStructured = JSON.parse(responseText);
+    return res.status(200).json({ success: true, data: aiStructured });
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      chunksRef.current = [];
-      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        await processAudio(blob);
-      };
-      mr.start(1000); mediaRecorderRef.current = mr; setRecording(true); setRecordingTime(0);
-      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
-    } catch (err) { showToast('Akses mikrofon ditolak.'); }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop(); setRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-  };
-
-  const processAudio = async (blob: Blob) => {
-    setAiLoading(true); showToast('Memproses sinyal suara...');
-    try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject; reader.readAsDataURL(blob);
-      });
-      const transcribeRes = await fetch('/api/analyze', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: "Tolong transkrip", audioBase64: base64 }) 
-      });
-      const resText = await transcribeRes.text();
-      const transcript = JSON.parse(resText).transcript || "Transkripsi terdeteksi.";
-      setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
-      await processTranscript(transcript);
-    } catch (err: any) {
-      showToast(`Transkripsi Audio Gagal, coba ketik manual.`); setAiLoading(false);
-    }
-  };
-
-  const processTranscript = async (transcript?: string) => {
-    const txt = transcript || form.raw_transcript;
-    if (!txt || typeof txt !== 'string' || !txt.trim()) return showToast('Teks rekaman kosong!');
-
-    setAiLoading(true); showToast('AI Sedang Merapikan Data...');
-
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: txt, agenda: form.agenda })
-      });
-      const resData = await res.json();
-      if (!resData.success) throw new Error(resData.error);
-
-      const aiOut = resData.data;
-
-      const formatString = (val: any): string => {
-        if (!val) return '';
-        if (typeof val === 'string') return val.trimEnd();
-        if (Array.isArray(val)) return val.map(item => String(item).trimEnd()).join('\n');
-        return String(val);
-      };
-
-      setForm(prev => ({
-        ...prev,
-        isi_notulen: formatString(aiOut.poin_penting) || prev.isi_notulen,
-        kesimpulan: formatString(aiOut.ringkasan) || prev.kesimpulan,
-        tindak_lanjut: formatString(aiOut.tindak_lanjut) || prev.tindak_lanjut,
-      }));
-      showToast('Data Berhasil Dirapikan AI!');
-    } catch (err: any) {
-      showToast(`AI Error: Cek Koneksi / Saldo API`);
-    } finally { 
-      setAiLoading(false); 
-    } // <--- TYPO TELAH DIPERBAIKI DI SINI
-  };
-
-  const handleSave = async (statusOverride?: string) => {
-    if (!form.judul || !form.tanggal) return showToast('Judul & Tanggal Wajib Diisi!');
-    setSaving(true);
-    try {
-      const payload = { ...form, status: statusOverride || form.status || 'draft' };
-      const method = isEdit ? 'PUT' : 'POST';
-      const bodyPayload = isEdit ? { ...payload, id: editId } : payload;
-
-      const res = await fetch('/api/notulen', {
-        method, headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bodyPayload)
-      });
-      if (!res.ok) throw new Error('Database Gagal Menyimpan');
-      showToast('Dokumen Berhasil Tersimpan!');
-      setTimeout(() => router.push(`/`), 1500);
-    } catch (err: any) { 
-      showToast(`Sistem Database Error`); 
-    } finally { 
-      setSaving(false); 
-    } // <--- TYPO TELAH DIPERBAIKI DI SINI
-  };
-
-  const countWords = (text: any) => text && typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
-  const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
-  return (
-    <>
-      <Head>
-        <title>{`${isEdit ? 'Edit Notulen' : 'Catatan Baru'} — AI Note`}</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
-      </Head>
-
-      <div className="min-h-screen bg-slate-50 w-full text-slate-800 font-sans pb-12 selection:bg-yellow-200">
-        
-        {toast && (
-          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl flex items-center gap-3 w-[90%] md:w-auto max-w-md justify-center">
-            {toast.includes('Error') || toast.includes('Gagal') || toast.includes('Wajib') ? (
-              <i className="fa-solid fa-triangle-exclamation text-red-500 text-lg"></i>
-            ) : toast.includes('Memproses') || toast.includes('AI') ? (
-              <i className="fa-solid fa-circle-notch fa-spin text-yellow-400 text-lg"></i>
-            ) : <i className="fa-solid fa-circle-check text-emerald-400 text-lg"></i>}
-            <span className="text-white font-medium text-xs sm:text-sm text-center">{toast}</span>
-          </div>
-        )}
-
-        <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm">
-          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-yellow-100 text-slate-500 transition-colors"><i className="fa-solid fa-arrow-left"></i></Link>
-              <h1 className="font-extrabold text-slate-800 text-xs sm:text-sm tracking-widest uppercase">{isEdit ? 'EDIT' : 'BUAT'} <span className="text-yellow-500">DOKUMEN</span></h1>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => handleSave('draft')} disabled={saving} className="px-3 sm:px-5 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-2">Draft</button>
-              <button onClick={() => handleSave(form.status === 'rahasia' ? 'rahasia' : 'final')} disabled={saving} className="px-3 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-yellow-400 text-yellow-950 shadow-md hover:bg-yellow-500 flex items-center gap-2">
-                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
-                <span>Simpan Berkas</span>
-              </button>
-            </div>
-          </div>
-        </nav>
-
-        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
-          
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>
-              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase border-b border-slate-100 pb-3 flex items-center gap-2"><i className="fa-solid fa-clipboard-list text-slate-400"></i> Identitas Rapat Resmi</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Judul Dokumen / Kegiatan *</label>
-                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white transition-all" placeholder="Contoh: Rakor Bulanan SDM PKh..." /></div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                  <div className="sm:col-span-6">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Hari / Tanggal *</label>
-                    <div className="relative">
-                      <i className="fa-regular fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                      <input type="date" value={form.tanggal || ''} onChange={e => setField('tanggal', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
-                    </div>
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Mulai</label>
-                    <input type="time" value={form.waktu_mulai || ''} onChange={e => setField('waktu_mulai', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white" />
-                  </div>
-                  
-                  <div className="sm:col-span-3">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Selesai</label>
-                    <input type="time" value={form.waktu_selesai || ''} onChange={e => setField('waktu_selesai', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2"><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi / Tempat Pelaksanaan</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" placeholder="Aula Dinas Sosial Kab. Tapin" /></div></div>
-                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Pimpinan Rapat</label><div className="relative"><i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.pimpinan_rapat || ''} onChange={e => setField('pimpinan_rapat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
-                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Notulis / Pencatat</label><div className="relative"><i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Daftar Peserta Hadir</label>
-                  <div className="relative"><i className="fa-solid fa-users absolute left-4 top-4 text-slate-400"></i><textarea value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} rows={2} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" placeholder="Korkab, Pendamping Sosial, Operator..." /></div>
-                </div>
-                
-                <div>
-                  <label className="block text-[10px] uppercase font-bold tracking-widest mb-1.5 text-yellow-600"><i className="fa-solid fa-shield-halved"></i> Otoritas Brankas Keamanan</label>
-                  <select value={form.status || 'draft'} onChange={e => setField('status', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 cursor-pointer">
-                    <option value="draft">📝 DRAFT (Arsip Konsep)</option>
-                    <option value="review">👁️ REVIEW (Pemeriksaan internal)</option>
-                    <option value="final">✅ FINAL (Publikasi Luar)</option>
-                    <option value="rahasia" className="text-red-600 font-extrabold">🔒 RAHASIA (Hanya Kebal PIN Admin Vault)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Agenda / Pokok Tema</label>
-                  <textarea value={form.agenda || ''} onChange={e => setField('agenda', e.target.value)} rows={2} className="w-full px-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" placeholder="Sebutkan pokok pembahasan..." />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative flex flex-col">
-              <div className="absolute top-0 right-0 w-1.5 h-full bg-yellow-400"></div>
-              <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
-                <h2 className="text-xs font-bold text-slate-500 tracking-widest uppercase"><i className="fa-solid fa-microphone-lines text-yellow-500"></i> Studio Suara Lisan</h2>
-                <span className="text-[10px] font-bold text-yellow-700 bg-yellow-100 px-2.5 py-1 rounded-md">{countWords(form.raw_transcript)} KATA</span>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 mb-4">
-                {!recording ? (
-                  <button onClick={startRecording} disabled={aiLoading} className="flex-1 px-4 py-3 rounded-xl text-xs font-bold uppercase bg-slate-100 hover:bg-slate-200 border border-slate-200"><i className="fa-solid fa-microphone"></i> Mulai Rekam</button>
-                ) : (
-                  <button onClick={stopRecording} className="flex-1 px-4 py-3 rounded-xl text-xs font-bold uppercase bg-red-50 text-red-600 border border-red-200 animate-pulse"><i className="fa-solid fa-stop"></i> Selesai • {formatTime(recordingTime)}</button>
-                )}
-                <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript} className="flex-1 px-4 py-3 rounded-xl text-xs font-extrabold uppercase bg-slate-900 text-white shadow-md hover:bg-slate-800 disabled:opacity-40">
-                  {aiLoading ? <><i className="fa-solid fa-circle-notch fa-spin text-yellow-400"></i> Memproses...</> : <><i className="fa-solid fa-wand-magic-sparkles text-yellow-400"></i> Rapikan AI</>}
-                </button>
-              </div>
-              <textarea value={form.raw_transcript || ''} onChange={e => setField('raw_transcript', e.target.value)} placeholder="Teks lisan otomatis muncul di sini..." rows={4} className="w-full flex-1 px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner leading-relaxed" />
-            </div>
-          </div>
-
-          <div className="lg:col-span-7 relative">
-            {aiLoading && (
-              <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center border border-yellow-200 shadow-2xl">
-                <div className="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-lg mb-4 animate-bounce"><i className="fa-solid fa-brain text-white text-3xl animate-pulse"></i></div>
-                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest mb-1">Deep Parsing AI...</h3>
-                <p className="text-slate-600 text-xs font-medium text-center px-8">Merapikan bahasa lisan, menyusun nomor hierarki angka/abjad, serta melenyapkan duplikasi kalimat.</p>
-              </div>
-            )}
-            <div className={`bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm h-full transition-opacity ${aiLoading ? 'opacity-30' : 'opacity-100'}`}>
-              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 border-b border-slate-100 pb-4 uppercase"><i className="fa-solid fa-file-signature text-slate-400"></i> Hasil Penyelarasan Otomatis</h2>
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-list-check text-yellow-500"></i> Hasil Pembahasan / Notulensi Bertingkat</label>
-                  <textarea value={form.isi_notulen || ''} onChange={e => setField('isi_notulen', e.target.value)} rows={14} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-loose shadow-inner whitespace-pre-wrap font-medium" />
-                </div>
-                <div>
-                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-bolt text-yellow-500"></i> Kesimpulan Ringkas Poin-ke-Poin</label>
-                  <textarea value={form.kesimpulan || ''} onChange={e => setField('kesimpulan', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-yellow-50/50 border border-yellow-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap font-bold text-yellow-950" />
-                </div>
-                <div>
-                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-forward-step text-yellow-500"></i> Rencana Tindak Lanjut (RTL)</label>
-                  <textarea value={form.tindak_lanjut || ''} onChange={e => setField('tindak_lanjut', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap font-medium" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
 }
