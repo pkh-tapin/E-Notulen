@@ -60,11 +60,10 @@ export default function LaporanResmi() {
     if (!printArea) return;
 
     const opt = {
-      margin: [15, 15, 20, 15], // Margin atas, kiri, bawah, kanan
+      margin: [15, 15, 20, 15], 
       filename: `LAPORAN_NOTULEN_${data.tanggal}_${data.judul.substring(0,10)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true, logging: false },
-      // Mengaktifkan sistem pembagian halaman pintar html2pdf
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -109,7 +108,6 @@ export default function LaporanResmi() {
     );
   }
 
-  // JIKA DOKUMEN RAHASIA DAN BELUM DIREKONSILIASI PIN ADMIN
   if (!isUnlocked) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
@@ -137,7 +135,6 @@ export default function LaporanResmi() {
       </Head>
 
       <div className="min-h-screen bg-slate-50 w-full text-slate-800 pb-12">
-        {/* NAV BAR */}
         <nav className="bg-white border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm print:hidden">
           <div className="w-full max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
             <Link href="/" className="text-slate-600 hover:text-yellow-600 transition-colors font-bold text-xs uppercase flex items-center gap-2">
@@ -150,20 +147,16 @@ export default function LaporanResmi() {
           </div>
         </nav>
 
-        {/* CONTAINER PREVIEW */}
         <div className="w-full max-w-3xl mx-auto mt-8 px-4 print:p-0">
           
-          {/* AREA FORMAL DOKUMEN ANTI-POTONG */}
           <div id="formal-report-area" className="bg-white p-8 md:p-12 border border-slate-200 shadow-sm print:border-none print:p-0 print:shadow-none" style={{ color: '#000', fontFamily: 'Arial, sans-serif' }}>
             
-            {/* KOP RESMI */}
-            <div style={{ text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px; display: block; }}>
-              <h1 style={{ margin: '0', fontSize: '15pt', fontWeight: 'bold', uppercase: 'true', letterSpacing: '0.5px' }}>LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
-              <h2 style={{ margin: '4px 0 0 0', fontSize: '12pt', fontWeight: 'bold', uppercase: 'true' }}>SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
+            <div style={{ textAlign: 'center', borderBottom: '3px double #000', paddingBottom: '12px', marginBottom: '25px', display: 'block' }}>
+              <h1 style={{ margin: '0', fontSize: '15pt', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.5px' }}>LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
+              <h2 style={{ margin: '4px 0 0 0', fontSize: '12pt', fontWeight: 'bold', textTransform: 'uppercase' }}>SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
               <p style={{ margin: '4px 0 0 0', fontSize: '11pt', fontWeight: 'bold' }}>KABUPATEN TAPIN</p>
             </div>
 
-            {/* SECTION 1: PEMBUKAAN */}
             <div style={{ marginBottom: '25px', display: 'block', pageBreakInside: 'avoid' }}>
               <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #eab308', margin: '0 0 12px 0', textTransform: 'uppercase' }}>I. Pembukaan & Identitas Rapat</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11pt' }}>
@@ -180,15 +173,13 @@ export default function LaporanResmi() {
               </table>
             </div>
 
-            {/* SECTION 2: PEMBAHASAN (MENDUKUNG MULTI-HALAMAN ALAMI) */}
             <div style={{ marginBottom: '25px', display: 'block' }}>
               <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #eab308', margin: '0 0 12px 0', textTransform: 'uppercase', pageBreakInside: 'avoid' }}>II. Hasil Pembahasan / Notulensi</h3>
-              <div style={{ fontSize: '11pt', lineHeight: '1.6', textAnign: 'justify', whiteSpace: 'pre-wrap', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', display: 'block' }}>
+              <div style={{ fontSize: '11pt', lineHeight: '1.6', textAlign: 'justify', whiteSpace: 'pre-wrap', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', display: 'block' }}>
                 {data.isi_notulen || 'Tidak ada catatan isi pembahasan.'}
               </div>
             </div>
 
-            {/* SECTION 3: KESIMPULAN (PADAT & MENONJOL) */}
             <div style={{ marginBottom: '25px', display: 'block', pageBreakInside: 'avoid' }}>
               <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #ef4444', margin: '0 0 12px 0', textTransform: 'uppercase' }}>III. Kesimpulan Eksekutif</h3>
               <div style={{ fontSize: '11pt', padding: '12px', backgroundColor: '#fefce8', border: '1px solid #fef08a', borderRadius: '6px', fontWeight: 'bold', lineHeight: '1.5', textAlign: 'justify', whiteSpace: 'pre-wrap' }}>
@@ -196,7 +187,6 @@ export default function LaporanResmi() {
               </div>
             </div>
 
-            {/* SECTION 4: TINDAK LANJUT */}
             <div style={{ marginBottom: '35px', display: 'block' }}>
               <h3 style={{ fontSize: '11pt', fontWeight: 'bold', backgroundColor: '#f1f5f9', padding: '6px 10px', borderLeft: '4px solid #0f172a', margin: '0 0 12px 0', textTransform: 'uppercase', pageBreakInside: 'avoid' }}>IV. Rencana Tindak Lanjut (RTL)</h3>
               <div style={{ fontSize: '11pt', lineHeight: '1.5', textAlign: 'justify', whiteSpace: 'pre-wrap', paddingLeft: '8px', borderLeft: '2px solid #e2e8f0', display: 'block' }}>
@@ -204,9 +194,8 @@ export default function LaporanResmi() {
               </div>
             </div>
 
-            {/* SIGNATURE BLOCK */}
             <div style={{ marginTop: '50px', textAlign: 'right', display: 'block', pageBreakInside: 'avoid' }}>
-              <div style={{ display: 'inline-block', textAnign: 'center', width: '240px', fontSize: '11pt' }}>
+              <div style={{ display: 'inline-block', textAlign: 'center', width: '240px', fontSize: '11pt' }}>
                 <p style={{ margin: '0 0 65px 0' }}>Tapin, {data.tanggal}</p>
                 <p style={{ margin: '0', fontWeight: 'bold', textDecoration: 'underline' }}>{data.pimpinan_rapat || '...........................................'}</p>
                 <p style={{ margin: '4px 0 0 0', fontSize: '10pt', color: '#475569' }}>Pimpinan Rapat</p>
