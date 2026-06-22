@@ -33,7 +33,6 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // [BLUEPRINT LOCKED] Menarik Data Edit dari Firebase
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen`)
@@ -53,7 +52,6 @@ export default function TambahNotulen() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 4000); };
   const setField = (key: keyof FormData, val: string) => setForm(prev => ({ ...prev, [key]: val }));
 
-  // [BLUEPRINT LOCKED] Fungsi Perekam Audio Lisan
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -98,7 +96,6 @@ export default function TambahNotulen() {
     }
   };
 
-  // [BLUEPRINT LOCKED] Komunikasi Engine AI (Kesetiaan Data Mutlak)
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt || typeof txt !== 'string' || !txt.trim()) return showToast('Teks rekaman kosong!');
@@ -131,7 +128,9 @@ export default function TambahNotulen() {
       showToast('Data Berhasil Dirapikan AI!');
     } catch (err: any) {
       showToast(`AI Error: Cek Koneksi / Saldo API`);
-    } finaly { setAiLoading(false); }
+    } finally { 
+      setAiLoading(false); 
+    } // <--- TYPO TELAH DIPERBAIKI DI SINI
   };
 
   const handleSave = async (statusOverride?: string) => {
@@ -149,7 +148,11 @@ export default function TambahNotulen() {
       if (!res.ok) throw new Error('Database Gagal Menyimpan');
       showToast('Dokumen Berhasil Tersimpan!');
       setTimeout(() => router.push(`/`), 1500);
-    } catch (err: any) { showToast(`Sistem Database Error`); } finaly { setSaving(false); }
+    } catch (err: any) { 
+      showToast(`Sistem Database Error`); 
+    } finally { 
+      setSaving(false); 
+    } // <--- TYPO TELAH DIPERBAIKI DI SINI
   };
 
   const countWords = (text: any) => text && typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
@@ -164,7 +167,6 @@ export default function TambahNotulen() {
 
       <div className="min-h-screen bg-slate-50 w-full text-slate-800 font-sans pb-12 selection:bg-yellow-200">
         
-        {/* TOAST NOTIFIKASI */}
         {toast && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl flex items-center gap-3 w-[90%] md:w-auto max-w-md justify-center">
             {toast.includes('Error') || toast.includes('Gagal') || toast.includes('Wajib') ? (
@@ -176,7 +178,6 @@ export default function TambahNotulen() {
           </div>
         )}
 
-        {/* TOP ACTION BAR */}
         <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm">
           <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -193,14 +194,12 @@ export default function TambahNotulen() {
           </div>
         </nav>
 
-        {/* WORKSPACE GRID */}
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
           
-          {/* IDENTITAS & STUDIO */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>
-              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase border-b border-slate-100 pb-3"><i className="fa-solid fa-clipboard-list text-slate-400"></i> Identitas Rapat Resmi</h2>
+              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase border-b border-slate-100 pb-3 flex items-center gap-2"><i className="fa-solid fa-clipboard-list text-slate-400"></i> Identitas Rapat Resmi</h2>
               
               <div className="space-y-4">
                 <div>
@@ -208,7 +207,6 @@ export default function TambahNotulen() {
                   <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white transition-all" placeholder="Contoh: Rakor Bulanan SDM PKh..." /></div>
                 </div>
 
-                {/* DUA KOLOM BARU: TANGGAL DAN WAKTU (ANTI BENTROK SISTEM MOBILE) */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                   <div className="sm:col-span-6">
                     <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Hari / Tanggal *</label>
@@ -257,7 +255,6 @@ export default function TambahNotulen() {
               </div>
             </div>
 
-            {/* REKAMAN */}
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative flex flex-col">
               <div className="absolute top-0 right-0 w-1.5 h-full bg-yellow-400"></div>
               <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
@@ -278,7 +275,6 @@ export default function TambahNotulen() {
             </div>
           </div>
 
-          {/* OUTPUT DOKUMEN OTOMATIS */}
           <div className="lg:col-span-7 relative">
             {aiLoading && (
               <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center border border-yellow-200 shadow-2xl">
