@@ -107,11 +107,11 @@ export default function TambahNotulen() {
 
       const aiOut = resData.data;
 
-      // FORMAT STRING DIPERBAIKI: Tidak ada tambahan peluru (•) manual
+      // Fungsi menyatukan array menjadi string dengan spasi ganda (enter) agar rapi
       const formatString = (val: any): string => {
         if (!val) return '';
         if (typeof val === 'string') return val.trim();
-        if (Array.isArray(val)) return val.map(item => `${item}`).join('\n\n').trim();
+        if (Array.isArray(val)) return val.map(item => String(item).trim()).join('\n\n');
         return String(val);
       };
 
@@ -254,7 +254,7 @@ export default function TambahNotulen() {
                   <div className="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-lg relative z-10"><i className="fa-solid fa-brain text-white text-3xl animate-pulse"></i></div>
                 </div>
                 <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest mb-2" style={{ animation: 'pulseGlow 2s infinite' }}>Deep Analysis...</h3>
-                <p className="text-slate-600 text-sm font-medium text-center px-8">Kecerdasan Buatan sedang membaca, mengelompokkan, dan merapikan data Anda secara mendalam.</p>
+                <p className="text-slate-600 text-sm font-medium text-center px-8">Kecerdasan Buatan sedang membuang duplikasi teks dan menyusunnya dalam poin rapi.</p>
               </div>
             )}
             <div className={`bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm h-full transition-opacity ${aiLoading ? 'opacity-30' : 'opacity-100'}`}>
