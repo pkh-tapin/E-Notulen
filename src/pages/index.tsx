@@ -131,7 +131,7 @@ export default function DashboardPremium() {
   // =========================================================================
   // ENGINE CETAK PDF (Blueprint Locked)
   // =========================================================================
-// ENGINE CETAK PDF PREMIUM (ANTI-CUTTING & TYPE-SAFE FIXED)
+// ENGINE CETAK PDF PREMIUM (AUTO-BOLD & AUTO-INDENT)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -139,20 +139,24 @@ export default function DashboardPremium() {
     printContainer.style.left = '-9999px';
     printContainer.style.top = '-9999px';
 
-    // TYPE-SAFE FIX: Fungsi ini sekarang dipaksa menerima input apapun (termasuk Array) dan diubah ke String
     const formatHtmlPDF = (textData?: string | string[] | null) => {
       let text = "";
-      if (Array.isArray(textData)) {
-        text = textData.join('\n\n'); // Jika Array, ubah jadi string dengan spasi ganda
-      } else if (typeof textData === 'string') {
-        text = textData;
-      }
-
+      if (Array.isArray(textData)) text = textData.join('\n');
+      else if (typeof textData === 'string') text = textData;
+      
       if (!text || text.trim() === '') return '<div style="margin-bottom: 8px;">-</div>';
       
-      return text.split('\n').filter(p => p.trim() !== '').map(p => 
-        `<div style="page-break-inside: avoid; margin-bottom: 12px; text-align: justify; line-height: 1.6;">${p.replace(/\*/g, '')}</div>`
-      ).join('');
+      return text.split('\n').filter(p => p.trim() !== '').map(p => {
+        let cleanText = p.replace(/\*/g, '').trim();
+        // Logika Detektif: Jika berawalan angka (1., 2.) jadikan BOLD. Jika abjad (a., b.), geser ke kanan.
+        let isMainPoint = /^\d+\.\s/.test(cleanText);
+        let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
+        
+        let padding = isSubPoint ? '20px' : '0px';
+        let fontWeight = isMainPoint ? 'bold' : 'normal';
+
+        return `<div style="page-break-inside: avoid; margin-bottom: 8px; text-align: justify; line-height: 1.6; padding-left: ${padding}; font-weight: ${fontWeight};">${cleanText}</div>`;
+      }).join('');
     };
     
     printContainer.innerHTML = `
@@ -168,8 +172,10 @@ export default function DashboardPremium() {
           <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
             <tr><td style="width: 28%; padding: 4px 0; font-weight: bold;">Judul Kegiatan</td><td style="width: 3%;">:</td><td style="padding: 4px 0; font-weight: bold;">${item.judul || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold;">Hari, Tanggal</td><td>:</td><td style="padding: 4px 0;">${item.tanggal || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold;">Waktu Pelaksanaan</td><td>:</td><td style="padding: 4px 0;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold;">Tempat / Lokasi</td><td>:</td><td style="padding: 4px 0;">${item.tempat || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold;">Pimpinan Rapat</td><td>:</td><td style="padding: 4px 0;">${item.pimpinan_rapat || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold;">Notulis / Pencatat</td><td>:</td><td style="padding: 4px 0;">${item.notulis || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Peserta</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.peserta || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Agenda</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.agenda || '-'}</td></tr>
           </table>
@@ -177,17 +183,17 @@ export default function DashboardPremium() {
 
         <div style="margin-bottom: 22px;">
           <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; page-break-inside: avoid;">II. Hasil Pembahasan / Notulensi</h3>
-          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; font-size: 11pt;">${formatHtmlPDF(item.isi_notulen)}</div>
+          <div style="font-size: 11pt;">${formatHtmlPDF(item.isi_notulen)}</div>
         </div>
 
         <div style="margin-bottom: 22px;">
           <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #ef4444; margin-bottom: 10px; page-break-inside: avoid;">III. Kesimpulan Eksekutif</h3>
-          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-weight: bold; font-size: 11pt;">${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}</div>
+          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-size: 11pt;">${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}</div>
         </div>
 
         <div style="margin-bottom: 30px;">
           <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #0f172a; margin-bottom: 10px; page-break-inside: avoid;">IV. Rencana Tindak Lanjut (RTL)</h3>
-          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; font-size: 11pt;">${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}</div>
+          <div style="font-size: 11pt;">${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}</div>
         </div>
 
         <div style="margin-top: 50px; text-align: right; page-break-inside: avoid;">
