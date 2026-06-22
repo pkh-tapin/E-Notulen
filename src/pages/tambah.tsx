@@ -100,7 +100,7 @@ export default function TambahNotulen() {
     const txt = transcript || form.raw_transcript;
     if (!txt || typeof txt !== 'string' || !txt.trim()) return showToast('Teks rekaman kosong!');
 
-    setAiLoading(true); showToast('AI Sedang Merapikan Data...');
+    setAiLoading(true); showToast('AI Sedang Menyelaraskan Data...');
 
     try {
       const res = await fetch('/api/analyze', {
@@ -112,10 +112,11 @@ export default function TambahNotulen() {
 
       const aiOut = resData.data;
 
+      // Pemisah array menjadi string yang menjaga indentasi dan alenia
       const formatString = (val: any): string => {
         if (!val) return '';
-        if (typeof val === 'string') return val.trimEnd();
-        if (Array.isArray(val)) return val.map(item => String(item).trimEnd()).join('\n');
+        if (typeof val === 'string') return val;
+        if (Array.isArray(val)) return val.join('\n');
         return String(val);
       };
 
@@ -171,7 +172,7 @@ export default function TambahNotulen() {
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl flex items-center gap-3 w-[90%] md:w-auto max-w-md justify-center">
             {toast.includes('Error') || toast.includes('Gagal') || toast.includes('Wajib') ? (
               <i className="fa-solid fa-triangle-exclamation text-red-500 text-lg"></i>
-            ) : toast.includes('Memproses') || toast.includes('AI') ? (
+            ) : toast.includes('Memproses') || toast.includes('AI') || toast.includes('Menyelaraskan') ? (
               <i className="fa-solid fa-circle-notch fa-spin text-yellow-400 text-lg"></i>
             ) : <i className="fa-solid fa-circle-check text-emerald-400 text-lg"></i>}
             <span className="text-white font-medium text-xs sm:text-sm text-center">{toast}</span>
@@ -204,48 +205,47 @@ export default function TambahNotulen() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Judul Dokumen / Kegiatan *</label>
-                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white transition-all" placeholder="Contoh: Rakor Bulanan SDM PKh..." /></div>
+                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white transition-all" placeholder="Contoh: Rakor Bulanan SDM PKH..." /></div>
                 </div>
 
-                {/* AREA TANGGAL & JAM: DIPERBESAR DAN DIPERJELAS */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-3">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Hari / Tanggal *</label>
+                {/* BARIS TANGGAL & JAM: MURNI BERJAJAR 3 KOLOM AGAR DIJAMIN MUNCUL */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Tanggal *</label>
                     <div className="relative">
                       <i className="fa-regular fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                      <input type="date" value={form.tanggal || ''} onChange={e => setField('tanggal', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm text-slate-800 bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                      <input type="date" value={form.tanggal || ''} onChange={e => setField('tanggal', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
                     </div>
                   </div>
                   
-                  {/* JAM MULAI TANPA IKON (Agar tidak nabrak di HP) */}
-                  <div className="sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-3">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5 text-center sm:text-left">Jam Mulai</label>
-                    <input type="time" value={form.waktu_mulai || ''} onChange={e => setField('waktu_mulai', e.target.value)} className="w-full px-3 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 text-center" />
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Mulai</label>
+                    <div className="relative">
+                      <i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                      <input type="time" value={form.waktu_mulai || ''} onChange={e => setField('waktu_mulai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                    </div>
                   </div>
                   
-                  <div className="flex items-center justify-center pt-3 sm:pt-0">
-                    <span className="text-slate-300 font-bold uppercase text-xs">Sampai</span>
-                  </div>
-
-                  {/* JAM SELESAI TANPA IKON */}
-                  <div className="sm:col-span-1 pt-3 sm:pt-0">
-                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5 text-center sm:text-left">Jam Selesai</label>
-                    <input type="time" value={form.waktu_selesai || ''} onChange={e => setField('waktu_selesai', e.target.value)} className="w-full px-3 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 text-center" />
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Selesai</label>
+                    <div className="relative">
+                      <i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                      <input type="time" value={form.waktu_selesai || ''} onChange={e => setField('waktu_selesai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 border-t border-slate-100 pt-4">
-                  <div className="sm:col-span-2"><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi / Tempat Pelaksanaan</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" placeholder="Aula Dinas Sosial Kab. Tapin" /></div></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                   <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Pimpinan Rapat</label><div className="relative"><i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.pimpinan_rapat || ''} onChange={e => setField('pimpinan_rapat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
-                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Notulis / Pencatat</label><div className="relative"><i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Daftar Peserta Hadir</label>
-                  <div className="relative"><i className="fa-solid fa-users absolute left-4 top-4 text-slate-400"></i><textarea value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} rows={2} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" placeholder="Korkab, Pendamping Sosial, Operator..." /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Notulis</label><div className="relative"><i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Peserta Hadir</label><div className="relative"><i className="fa-solid fa-users absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
                 </div>
                 
-                <div>
+                <div className="pt-2">
                   <label className="block text-[10px] uppercase font-bold tracking-widest mb-1.5 text-yellow-600"><i className="fa-solid fa-shield-halved"></i> Otoritas Brankas Keamanan</label>
                   <select value={form.status || 'draft'} onChange={e => setField('status', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 cursor-pointer">
                     <option value="draft">📝 DRAFT (Arsip Konsep)</option>
