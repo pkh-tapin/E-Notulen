@@ -39,22 +39,29 @@ export default function LaporanResmi() {
   };
 
   // ALGORITMA PEMISAH PARAGRAF ANTI-CUTTING
-  // Ini akan membelah teks per poin (Enter) dan memberinya pelindung
-// ALGORITMA AUTO-FORMATTER TINGKAT DEWA
-  const formatUntukPDF = (text?: string) => {
-    if (!text) return '<div style="margin-bottom: 8px;">-</div>';
+// ALGORITMA FORMATTER (BOLD & ALENIA)
+  const formatUntukPDF = (textData?: string | string[] | null) => {
+    let text = "";
+    if (Array.isArray(textData)) text = textData.join('\n');
+    else if (typeof textData === 'string') text = textData;
+
+    if (!text || text.trim() === '') return '<div style="margin-bottom: 8px;">-</div>';
+    
     return text.split('\n').filter(p => p.trim() !== '').map(p => {
       let cleanText = p.replace(/\*/g, '').trim();
+      
       let isMainPoint = /^\d+\.\s/.test(cleanText);
       let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
       
-      let padding = isSubPoint ? '20px' : '0px';
+      let paddingLeft = isSubPoint ? '28px' : '0px';
       let fontWeight = isMainPoint ? 'bold' : 'normal';
+      let textTransform = isMainPoint ? 'uppercase' : 'none';
+      let marginTop = isMainPoint ? '14px' : '6px';
 
-      return `<div style="page-break-inside: avoid; margin-bottom: 8px; text-align: justify; line-height: 1.6; padding-left: ${padding}; font-weight: ${fontWeight};">${cleanText}</div>`;
+      return `<div style="page-break-inside: avoid; margin-top: ${marginTop}; margin-bottom: 4px; text-align: justify; line-height: 1.6; padding-left: ${paddingLeft}; font-weight: ${fontWeight}; text-transform: ${textTransform};">${cleanText}</div>`;
     }).join('');
   };
-
+  
   const generatePDF = async () => {
     if (!data) return;
     setPrinting(true);
