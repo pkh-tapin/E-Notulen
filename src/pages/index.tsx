@@ -131,8 +131,7 @@ export default function DashboardPremium() {
   // =========================================================================
   // ENGINE CETAK PDF (Blueprint Locked)
   // =========================================================================
-// ENGINE CETAK PDF PREMIUM (ANTI-CUTTING / LENGKAP TANPA TERPOTONG)
- // ENGINE CETAK PDF (ANTI-CUTTING PARAGRAPH SPLITTER)
+// ENGINE CETAK PDF PREMIUM (ANTI-CUTTING & TYPE-SAFE FIXED)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -140,8 +139,17 @@ export default function DashboardPremium() {
     printContainer.style.left = '-9999px';
     printContainer.style.top = '-9999px';
 
-    const formatHtmlPDF = (text?: string) => {
-      if (!text) return '<div style="margin-bottom: 8px;">-</div>';
+    // TYPE-SAFE FIX: Fungsi ini sekarang dipaksa menerima input apapun (termasuk Array) dan diubah ke String
+    const formatHtmlPDF = (textData?: string | string[] | null) => {
+      let text = "";
+      if (Array.isArray(textData)) {
+        text = textData.join('\n\n'); // Jika Array, ubah jadi string dengan spasi ganda
+      } else if (typeof textData === 'string') {
+        text = textData;
+      }
+
+      if (!text || text.trim() === '') return '<div style="margin-bottom: 8px;">-</div>';
+      
       return text.split('\n').filter(p => p.trim() !== '').map(p => 
         `<div style="page-break-inside: avoid; margin-bottom: 12px; text-align: justify; line-height: 1.6;">${p.replace(/\*/g, '')}</div>`
       ).join('');
