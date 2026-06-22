@@ -9,34 +9,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { text, agenda } = req.body;
     if (!text) return res.status(400).json({ error: 'Teks tidak boleh kosong' });
 
-    // PROMPT ZERO HALLUCINATION & FORMATTING KETAT
-    const prompt = `Anda adalah Asisten Notulis Eksekutif yang SANGAT PATUH untuk SDM PKH Tapin.
-    Tugas Anda HANYALAH merapikan catatan mentah menjadi notulen resmi. PATOKAN MUTLAK ADALAH TEKS ASLI.
+    // PROMPT DOKTRIN KESETIAAN MUTLAK (NAMA TOKOH & ANTI BUANG DATA)
+    const prompt = `Anda adalah Asisten Notulis Eksekutif di SDM PKH Tapin. 
+    Tugas Anda: Merapikan catatan mentah/transkrip suara menjadi notulensi. PATOKAN MUTLAK ADALAH TEKS ASLI.
 
-    ATURAN MUTLAK KESETIAAN & FORMAT BARU (WAJIB DIIKUTI):
-    1. ANTI BERSPEKULASI (ZERO HALLUCINATION): DILARANG KERAS menambah opini, mengarang fakta, atau membuang data (angka, nama, masalah, keputusan) sekecil apapun dari teks asli. Hanya rapikan bahasanya dan hapus duplikasi kata yang berulang.
-    2. FORMAT POIN UTAMA (KAPITAL): 
-       - Gunakan angka standar (1., 2., 3.).
-       - WAJIB gunakan HURUF KAPITAL (BESAR) SELURUHNYA untuk judul poin utama.
-       - Contoh: "1. EVALUASI KINERJA LAPANGAN"
-    3. FORMAT ANAK POIN (MENJOROK/ALENIA):
-       - Gunakan huruf abjad kecil (a., b., c.).
-       - WAJIB beri awalan 4 spasi sebelum huruf agar teks menjorok ke dalam (alenia).
-       - Contoh: "    a. Seluruh SDM PKH diwajibkan..."
-    4. ANTI SIMBOL: JANGAN PERNAH menggunakan simbol bintang (*), tebal (**), hashtag (#), atau peluru (•). Hanya gunakan Angka, Spasi, dan Abjad.
-    5. KESIMPULAN & RTL: Buat sangat ringkas dan padat.
+    DOKTRIN KESETIAAN DATA (WAJIB DIPATUHI 100%):
+    1. HARGA MATI NAMA PEMATERI: JANGAN PERNAH menghapus nama orang! Jika teks asli menyebutkan "Bapak X menyampaikan..." atau "Ibu Y menanyakan...", Anda WAJIB MENCANTUMKAN nama Bapak/Ibu tersebut di dalam rincian Anda.
+    2. PENANGANAN PENDAPAT GANDA/SAMA: Jika ada tokoh yang menyampaikan hal yang sama/mirip, JANGAN DIBUANG. Tuliskan dengan rapi, contoh: "Sejalan dengan penyampaian Bapak A, Ibu B menegaskan kembali bahwa..."
+    3. DILARANG BERSPEKULASI: JANGAN menambahkan opini, kata-kata yang tidak ada konteksnya di teks asli, atau membuang data. Kunci pemahaman Anda sama persis dengan apa yang diketik/direkam.
+    4. TUGAS ANDA HANYA MERAPIKAN: Rapikan bahasa lisannya, perbaiki typo, dan perjelas kalimat yang rumpang tanpa keluar dari konteks.
+
+    ATURAN FORMAT VISUAL (WAJIB DIIKUTI):
+    - POIN UTAMA (Angka): Gunakan (1., 2., 3.). WAJIB HURUF KAPITAL SEMUA untuk judul poinnya.
+    - ANAK POIN (Abjad): Gunakan (a., b., c.). WAJIB beri awalan 4 spasi (    a.) agar menjorok ke dalam (alenia).
+    - ANTI SIMBOL: Dilarang keras memakai bintang (*), tebal (**), hashtag (#), atau peluru (•).
+    - Kesimpulan & Tindak Lanjut dibuat sangat ringkas, padat, jelas menggunakan angka murni.
 
     Agenda: ${agenda || 'Pembahasan Umum'}
     Transkrip Mentah Rapat: 
     "${text}"
     
-    KEMBALIKAN DALAM FORMAT JSON ARRAY STRING (PERHATIKAN SPASI PADA ANAK POIN):
+    KEMBALIKAN DALAM FORMAT JSON ARRAY STRING:
     {
       "ringkasan": ["1. Kesimpulan satu", "2. Kesimpulan dua"],
       "poin_penting": [
         "1. [JUDUL TOPIK PERTAMA HURUF KAPITAL]", 
-        "    a. [Penjelasan detail topik pertama yang sudah dirapikan...]", 
-        "    b. [Detail penjelasan lainnya...]",
+        "    a. Bapak X menyampaikan bahwa...", 
+        "    b. Ibu Y menambahkan terkait...",
         "2. [JUDUL TOPIK KEDUA HURUF KAPITAL]",
         "    a. [Penjelasan...]"
       ],
@@ -61,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       responseText = completion.choices[0].message.content || "";
     }
 
-    // Ekstraksi dan Pembersihan Paksa Simbol Bintang
+    // Pembersihan Karakter Nakal
     responseText = responseText.replace(/\*/g, '').replace(/\`\`\`json/gi, '').replace(/\`\`\`/g, '').trim();
     
     const aiStructured = JSON.parse(responseText);
