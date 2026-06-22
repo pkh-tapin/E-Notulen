@@ -131,6 +131,7 @@ export default function DashboardPremium() {
   // =========================================================================
   // ENGINE CETAK PDF (Blueprint Locked)
   // =========================================================================
+// ENGINE CETAK PDF PREMIUM (ANTI-CUTTING / LENGKAP TANPA TERPOTONG)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -139,59 +140,77 @@ export default function DashboardPremium() {
     printContainer.style.top = '-9999px';
     
     printContainer.innerHTML = `
-      <div id="print-capture-area" style="padding: 20mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; line-height: 1.5; font-size: 11pt; width: 210mm; min-height: 297mm; box-sizing: border-box;">
-        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px;">
-          <h1 style="margin: 0; font-size: 16pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
-          <h2 style="margin: 5px 0 0 0; font-size: 12pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
-          <p style="margin: 5px 0 0 0; font-size: 11pt; font-weight: bold; text-transform: uppercase;">KABUPATEN TAPIN</p>
+      <div id="print-capture-area" style="padding: 20mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; line-height: 1.6; font-size: 11pt; width: 210mm; box-sizing: border-box;">
+
+        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px; display: block;">
+          <h1 style="margin: 0; font-size: 15pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
+          <h2 style="margin: 4px 0 0 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
+          <p style="margin: 4px 0 0 0; font-size: 11pt; font-weight: bold;">KABUPATEN TAPIN</p>
         </div>
-        <div style="margin-bottom: 20px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 8px; border-left: 4px solid #f97316; margin-bottom: 10px; text-transform: uppercase;">I. Pembukaan & Identitas Rapat</h3>
+
+        <div style="margin-bottom: 22px; display: block; page-break-inside: avoid;">
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; text-transform: uppercase;">I. Pembukaan & Identitas Rapat</h3>
           <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
-            <tr><td style="width: 25%; padding: 4px 0; font-weight: bold; vertical-align: top;">Kegiatan / Judul</td><td style="width: 3%; vertical-align: top;">:</td><td style="padding: 4px 0; font-weight: bold;">${item.judul || '-'}</td></tr>
+            <tr><td style="width: 28%; padding: 4px 0; font-weight: bold; vertical-align: top;">Judul Kegiatan</td><td style="width: 3%; vertical-align: top;">:</td><td style="padding: 4px 0; font-weight: bold;">${item.judul || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Hari, Tanggal</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.tanggal || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Waktu Pelaksanaan</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Tempat / Lokasi</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.tempat || '-'}</td></tr>
             <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Pimpinan Rapat</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.pimpinan_rapat || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Lokasi / Tempat</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.tempat || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Notulis / Pencatat</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0;">${item.notulis || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Daftar Peserta Hadir</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.peserta || '-'}</td></tr>
+            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Agenda Utama</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.agenda || '-'}</td></tr>
           </table>
         </div>
-        <div style="margin-bottom: 20px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 8px; border-left: 4px solid #f97316; margin-bottom: 10px; text-transform: uppercase;">II. Hasil Pembahasan</h3>
-          <div style="padding-left: 10px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify;">${item.isi_notulen || '-'}</div>
+
+        <div style="margin-bottom: 22px; display: block;">
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; text-transform: uppercase; page-break-inside: avoid;">II. Hasil Pembahasan / Notulensi</h3>
+          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify; font-size: 11pt; line-height: 1.6; display: block;">${item.isi_notulen || '-'}</div>
         </div>
-        <div style="margin-bottom: 20px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 8px; border-left: 4px solid #ef4444; margin-bottom: 10px; text-transform: uppercase;">III. Kesimpulan Eksekutif</h3>
-          <div style="padding: 12px; background-color: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px; font-weight: bold; text-align: justify; white-space: pre-wrap;">${item.kesimpulan || item.ai_structured?.ringkasan || '-'}</div>
+
+        <div style="margin-bottom: 22px; display: block; page-break-inside: avoid;">
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #ef4444; margin-bottom: 10px; text-transform: uppercase;">III. Kesimpulan Eksekutif</h3>
+          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-weight: bold; text-align: justify; white-space: pre-wrap; line-height: 1.5;">${item.kesimpulan || item.ai_structured?.ringkasan || '-'}</div>
         </div>
-        <div style="margin-bottom: 30px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 8px; border-left: 4px solid #0f172a; margin-bottom: 10px; text-transform: uppercase;">IV. Rencana Tindak Lanjut (RTL)</h3>
-          <div style="padding-left: 10px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify;">${item.tindak_lanjut || item.ai_structured?.tindak_lanjut || '-'}</div>
+
+        <div style="margin-bottom: 30px; display: block;">
+          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #0f172a; margin-bottom: 10px; text-transform: uppercase; page-break-inside: avoid;">IV. Rencana Tindak Lanjut (RTL)</h3>
+          <div style="padding-left: 8px; border-left: 2px solid #e2e8f0; white-space: pre-wrap; text-align: justify; font-size: 11pt; line-height: 1.5; display: block;">${item.tindak_lanjut || item.ai_structured?.tindak_lanjut || '-'}</div>
         </div>
-        <div style="margin-top: 50px; text-align: right;">
-          <div style="display: inline-block; text-align: center; width: 250px;">
-            <p style="margin: 0 0 70px 0;">Tapin, ${item.tanggal || '-'}</p>
+
+        <div style="margin-top: 50px; text-align: right; display: block; page-break-inside: avoid;">
+          <div style="display: inline-block; text-align: center; width: 240px; font-size: 11pt;">
+            <p style="margin: 0 0 65px 0;">Tapin, ${item.tanggal || '-'}</p>
             <p style="margin: 0; font-weight: bold; text-decoration: underline;">${item.pimpinan_rapat || '...........................................'}</p>
-            <p style="margin: 5px 0 0 0; font-size: 10pt; color: #475569;">Pimpinan Rapat</p>
+            <p style="margin: 4px 0 0 0; font-size: 10pt; color: #475569;">Pimpinan Rapat</p>
           </div>
         </div>
+
       </div>
     `;
     document.body.appendChild(printContainer);
 
     const filename = `NOTULEN_${item.tanggal}_${item.id.substring(0,5)}.pdf`;
     const opt = {
-      margin: 0, filename: filename, image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      margin: [15, 15, 20, 15],
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
     const runPDF = async () => {
       try {
         const worker = (window as any).html2pdf().set(opt).from(document.getElementById('print-capture-area'));
         await worker.save();
+        
         const pdfBase64 = await worker.outputPdf('datauristring');
         fetch('/api/upload-pdf', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pdfBase64, fileName: filename })
         }).catch(e => console.error("Drive Backup Gagal:", e));
+
       } catch (err) {
         console.error("PDF Error:", err);
       } finally {
@@ -209,7 +228,6 @@ export default function DashboardPremium() {
       runPDF();
     }
   };
-
 const hitungTotal = data.filter(d => isAdmin || d.status !== 'rahasia').length;
   const hitungFinal = data.filter(d => d.status === 'final').length;
   const hitungRahasia = data.filter(d => d.status === 'rahasia').length;
