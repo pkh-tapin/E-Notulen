@@ -59,12 +59,13 @@ export default function LaporanResmi() {
     const printArea = document.getElementById('formal-report-area');
     if (!printArea) return;
 
+    // Menghapus avoid-all agar teks panjang terpotong alami antar halaman
     const opt = {
-      margin: [15, 15, 20, 15], 
+      margin: [10, 0, 10, 0],
       filename: `LAPORAN_NOTULEN_${data.tanggal}_${data.judul.substring(0,10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
+      image: { type: 'jpeg', quality: 1 },
+      html2canvas: { scale: 2, useCORS: true },
+      pagebreak: { mode: ['css'] }, 
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -87,7 +88,6 @@ export default function LaporanResmi() {
       runPDF();
     }
   };
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
