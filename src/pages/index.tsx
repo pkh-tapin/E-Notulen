@@ -2,6 +2,13 @@ import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 
+// =========================================================================
+// IMPORT FIREBASE REALTIME DATABASE 
+// (Sesuai dengan struktur folder Anda di src/lib/firebase.ts)
+// =========================================================================
+import { ref, onValue, remove } from 'firebase/database';
+import { db } from '../lib/firebase';
+
 interface AIStructured {
   ringkasan?: string;
   poin_penting?: string[];
@@ -46,29 +53,42 @@ export default function DashboardPremium() {
 
   const [printingId, setPrintingId] = useState<string | null>(null);
 
+  // =========================================================================
+  // SINKRONISASI REALTIME DENGAN FIREBASE
+  // =========================================================================
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
     setLoading(true);
-    try {
-      const res = await fetch('/api/notulen');
-      const result = await res.json();
-      if (!result.error && Array.isArray(result)) {
-        const sortedData = result.sort((a: any, b: any) => {
+    const notulenRef = ref(db, 'notulen');
+    
+    // onValue akan terus mendengarkan perubahan data secara realtime
+    const unsubscribe = onValue(notulenRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const dataObj = snapshot.val();
+        
+        // Ubah object Firebase menjadi array
+        const formattedData = Object.keys(dataObj).map(key => ({
+          id: key,
+          ...dataObj[key]
+        })) as Notulen[];
+
+        // Urutkan berdasarkan tanggal terbaru
+        const sortedData = formattedData.sort((a, b) => {
           return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
         });
+        
         setData(sortedData);
-      } else if (!result.error && !Array.isArray(result)) {
-        setData([]);
+      } else {
+        setData([]); // Jika database kosong
       }
-    } catch (err) {
-      console.error("Gagal sinkronisasi:", err);
-    } finally {
       setLoading(false);
-    }
-  };
+    }, (error) => {
+      console.error("Gagal sinkronisasi dari Firebase:", error);
+      setLoading(false);
+    });
+
+    // Cleanup listener
+    return () => unsubscribe();
+  }, []);
 
   // =========================================================================
   // SISTEM FILTER KHUSUS ADMIN (TIDAK BISA DITEMBUS TANPA PIN)
@@ -112,23 +132,25 @@ export default function DashboardPremium() {
     }
   };
 
+  // =========================================================================
+  // HAPUS DATA PERMANEN DARI FIREBASE
+  // =========================================================================
   const confirmDelete = async () => {
     if (!deleteId) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/notulen?id=${deleteId}`, { method: 'DELETE' });
-      if (res.ok) {
-        setData(data.filter(item => item.id !== deleteId));
-        setDeleteId(null);
-      }
+      const targetRef = ref(db, `notulen/${deleteId}`);
+      await remove(targetRef);
+      // Tidak perlu setData manual karena onValue (realtime) akan otomatis update UI
+      setDeleteId(null);
     } catch (err) {
-      console.error(err);
+      console.error("Gagal menghapus data:", err);
     } finally {
       setIsDeleting(false);
     }
   };
 
-// ENGINE CETAK PDF (AUTO-BOLD & ALENIA)
+  // ENGINE CETAK PDF (AUTO-BOLD & ALENIA)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -239,10 +261,10 @@ export default function DashboardPremium() {
     } else runPDF();
   };
   
-const hitungTotal = data.filter(d => isAdmin || d.status !== 'rahasia').length;
+  const hitungTotal = data.filter(d => isAdmin || d.status !== 'rahasia').length;
   const hitungFinal = data.filter(d => d.status === 'final').length;
   const hitungRahasia = data.filter(d => d.status === 'rahasia').length;
-  const hitungDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length; // <--- INI BARIS YANG DITAMBAHKAN
+  const hitungDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length; 
 
   return (
     <>
