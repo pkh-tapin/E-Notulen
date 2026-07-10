@@ -2,7 +2,6 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, ref, get, set, remove, push, child } from 'firebase/database';
 
-// Konfigurasi agar payload tidak terpotong saat menyimpan teks notulen yang panjang
 export const config = {
   api: {
     bodyParser: {
@@ -11,8 +10,6 @@ export const config = {
   },
 };
 
-// Menggunakan variabel .env dengan Fallback ke konfigurasi hardcode
-// Mencegah error 500 "Konfigurasi Database Hilang" jika .env gagal terbaca
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAp-8B3CXLQikB-8-b9-pKlqH2aTX-5lcU",
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "e-notulen-ecfd7.firebaseapp.com",
@@ -23,7 +20,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:278047156272:web:73735a002662bee33525f5"
 };
 
-// FILTER BAJA: Wajib ada agar bug [object Object] tidak meracuni Firebase Anda
+// FILTER BAJA: Membersihkan data agar bug [object Object] tidak meracuni Firebase Anda
 const cleanObjectData = (obj: any): any => {
   if (!obj || typeof obj !== 'object') return obj;
   const copy = Array.isArray(obj) ? [...obj] : { ...obj };
@@ -46,48 +43,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // Pastikan konfigurasi Firebase terbaca
-    if (!firebaseConfig.databaseURL) {
-      console.error("🔥 ERROR FIREBASE: Variabel .env untuk Firebase kosong!");
-      return res.status(500).json({ error: "Konfigurasi Database Hilang" });
-    }
-
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     const db = getDatabase(app);
     
-    // Disinkronkan menjadi 'notulen' agar terhubung dengan Frontend tambah(6).tsx
+    // NAMA KOLEKSI HARGA MATI (SINKRONISASI UTAMA)
     const collectionName = 'notulen'; 
     const dbRef = ref(db, collectionName);
 
-    // Parsing Body dengan aman
     let rawBody = req.body;
     if (typeof rawBody === 'string' && rawBody.trim() !== '') {
-      try {
-        rawBody = JSON.parse(rawBody);
-      } catch (e) {
-        console.error("⚠️ Gagal otomatis mengubah string body ke JSON");
-      }
+      try { rawBody = JSON.parse(rawBody); } catch (e) { console.error("Parse JSON error"); }
     }
 
-    // =========================================================================
-    // METHOD GET: Ambil Data
-    // =========================================================================
     if (req.method === 'GET') {
       const { id } = req.query;
       
-      // Jika request minta 1 ID spesifik (untuk halaman Edit)
+      // Mengambil 1 dokumen untuk Edit
       if (id) {
         const snapshot = await get(child(ref(db), `${collectionName}/${id}`));
         if (snapshot.exists()) return res.status(200).json(snapshot.val());
         return res.status(404).json({ error: 'Data tidak ditemukan' });
       }
 
-      // Jika minta semua data
+      // Mengambil semua data untuk Dashboard
       const snapshot = await get(dbRef);
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -97,48 +78,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json([]);
     } 
     
-    // =========================================================================
-    // METHOD POST: Simpan Data Baru
-    // =========================================================================
     else if (req.method === 'POST') {
       const cleanedData = cleanObjectData(rawBody);
       const newDocRef = push(dbRef);
-      
-      await set(newDocRef, { 
-        ...cleanedData, 
-        id: newDocRef.key, 
-        created_at: Date.now() 
-      });
+      await set(newDocRef, { ...cleanedData, id: newDocRef.key, created_at: Date.now() });
       return res.status(201).json({ success: true, id: newDocRef.key, ...cleanedData });
     } 
     
-    // =========================================================================
-    // METHOD PUT: Update Data
-    // =========================================================================
     else if (req.method === 'PUT') {
       const { id, ...updateData } = rawBody; 
       const queryId = req.query.id || id; 
 
-      if (!queryId) return res.status(400).json({ error: 'ID tidak ditemukan untuk update' });
-      
+      if (!queryId) return res.status(400).json({ error: 'ID tidak ditemukan' });
       const cleanedData = cleanObjectData(updateData);
       const docToUpdateRef = ref(db, `${collectionName}/${queryId}`);
       
-      await set(docToUpdateRef, { 
-        ...cleanedData, 
-        id: queryId, 
-        updated_at: Date.now() 
-      });
+      await set(docToUpdateRef, { ...cleanedData, id: queryId, updated_at: Date.now() });
       return res.status(200).json({ success: true, id: queryId, ...cleanedData });
     }
 
-    // =========================================================================
-    // METHOD DELETE: Hapus Data
-    // =========================================================================
     else if (req.method === 'DELETE') {
       const { id } = req.query;
-      if (!id) return res.status(400).json({ error: 'ID wajib disediakan untuk hapus' });
-      
+      if (!id) return res.status(400).json({ error: 'ID wajib disediakan' });
       const docToDeleteRef = ref(db, `${collectionName}/${id}`);
       await remove(docToDeleteRef);
       return res.status(200).json({ success: true, message: 'Data berhasil dihapus' });
