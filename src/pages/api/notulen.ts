@@ -10,11 +10,7 @@ export const config = {
   },
 };
 
-// =========================================================================
-// 🔴 TITIK 1: KONEKSI DATABASE
-// Jika aplikasi masih kosong setelah ini di-push, HAPUS tulisan `process.env...` 
-// dan GANTI dengan konfigurasi string asli yang ada di file `firebase.ts` Anda.
-// =========================================================================
+// Murni menggunakan koneksi .env sesuai blueprint Anda agar tidak nyasar
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -49,9 +45,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const db = getDatabase(app);
     
     // =========================================================================
-    // 🔴 TITIK 2: PASTIKAN NAMA FOLDER SAMA PERSIS DENGAN DI FIREBASE ANDA
+    // KUNCI JAWABANNYA DI SINI: NAMA FOLDER MENGGUNAKAN "N" BESAR 
+    // SESUAI DENGAN GAMBAR FIREBASE ANDA
     // =========================================================================
-    const collectionName = 'notulen'; // <-- Jika di gambar Firebase namanya lain (misal 'Data_Notulen'), ubah kata 'notulen' ini!
+    const collectionName = 'Notulen'; 
     
     const dbRef = ref(db, collectionName);
 
