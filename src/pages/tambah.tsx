@@ -4,27 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 
 // =========================================================================
-// PENGHANCUR OBJEK REKURSIF (MUTLAK ANTI [object Object] di Frontend)
-// Dipindah ke luar komponen agar bisa mendetoksifikasi data dari Database
-// =========================================================================
-const formatText = (val: any): string => {
-  if (val === null || val === undefined) return '';
-  if (typeof val === 'string') {
-    // DETEKSI STRING RACUN DARI DATABASE & HANCURKAN
-    if (val.trim() === '[object Object]') return '';
-    return val.replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-  }
-  if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-  if (Array.isArray(val)) {
-    return val.map(v => formatText(v)).join('\n');
-  }
-  if (typeof val === 'object') {
-    return Object.values(val).map(v => formatText(v)).join('\n\n');
-  }
-  return String(val).trim();
-};
-
-// =========================================================================
 // BLUEPRINT TERKUNCI: FORM DATA INTERFACE
 // =========================================================================
 interface FormData {
@@ -69,20 +48,28 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // =========================================================================
+  // PATCH SINKRONISASI DATABASE: Sterilisasi [object Object] saat ditarik
+  // =========================================================================
+  const detoxDB = (val: any) => {
+    if (typeof val === 'string' && val.trim() === '[object Object]') return '';
+    return val;
+  };
+
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen?id=${editId}`)
         .then(r => r.json())
         .then(d => {
           if (d && !d.error) {
-            // STERILISASI DATA SAAT DITARIK DARI DATABASE
             setForm({
               ...d,
-              isi_notulen: formatText(d.isi_notulen),
-              kesimpulan: formatText(d.kesimpulan),
-              tindak_lanjut: formatText(d.tindak_lanjut),
-              agenda: formatText(d.agenda),
-              peserta: formatText(d.peserta)
+              isi_notulen: detoxDB(d.isi_notulen),
+              kesimpulan: detoxDB(d.kesimpulan),
+              tindak_lanjut: detoxDB(d.tindak_lanjut),
+              agenda: detoxDB(d.agenda),
+              peserta: detoxDB(d.peserta),
+              raw_transcript: detoxDB(d.raw_transcript)
             });
           }
         })
@@ -202,15 +189,9 @@ export default function TambahNotulen() {
       try {
         const parsedData = JSON.parse(cleanStr);
         finalJudul = parsedData.judul_saran || parsedData.judul || '';
-        
-        // AI PENYELAMAT: Tangkap semua kemungkinan nama key yang dihasilkan AI
-        finalIsi = parsedData.isi_notulen || parsedData.isi || parsedData.isi_pembahasan || parsedData.pembahasan || '';
+        finalIsi = parsedData.isi_notulen || parsedData.isi || '';
         finalKesimpulan = parsedData.kesimpulan || '';
         finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
-
-        if (!finalIsi && Object.keys(parsedData).length > 0) {
-          finalIsi = JSON.stringify(parsedData); // Jika struktur AI kacau, telan semuanya untuk dihancurkan formatter
-        }
       } catch (e1) {
         const getMatch = (key: string) => {
           const regex = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|}|\\n)`, 'i');
@@ -218,11 +199,27 @@ export default function TambahNotulen() {
           return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
         };
         finalJudul = getMatch('judul_saran') || getMatch('judul');
-        finalIsi = getMatch('isi_notulen') || getMatch('isi') || getMatch('pembahasan');
+        finalIsi = getMatch('isi_notulen') || getMatch('isi');
         finalKesimpulan = getMatch('kesimpulan');
         finalTindakLanjut = getMatch('tindak_lanjut') || getMatch('tindaklanjut');
         if (!finalIsi) finalIsi = cleanStr;
       }
+
+      // =========================================================================
+      // PENGHANCUR OBJEK REKURSIF BAWAAN ASLI ANDA
+      // =========================================================================
+      const formatText = (val: any): string => {
+        if (val === null || val === undefined) return '';
+        if (typeof val === 'string') return String(val).replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
+        if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+        if (Array.isArray(val)) {
+          return val.map(v => formatText(v)).join('\n');
+        }
+        if (typeof val === 'object') {
+          return Object.values(val).map(v => formatText(v)).join('\n\n');
+        }
+        return String(val).trim();
+      };
 
       setForm(prev => ({
         ...prev,
