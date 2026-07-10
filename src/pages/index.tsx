@@ -1,11 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-
-// =========================================================================
-// IMPORT FIREBASE REALTIME DATABASE 
-// (Sesuai dengan struktur folder Anda di src/lib/firebase.ts)
-// =========================================================================
 import { ref, onValue, remove } from 'firebase/database';
 import { db } from '../lib/firebase';
 
@@ -54,22 +49,19 @@ export default function DashboardPremium() {
   const [printingId, setPrintingId] = useState<string | null>(null);
 
   // =========================================================================
-  // SINKRONISASI REALTIME DENGAN FIREBASE
-  // =========================================================================
- // =========================================================================
-  // SINKRONISASI REALTIME DENGAN FIREBASE (DENGAN RADAR DEBUG)
+  // BACA DATA DARI NODE 'notes'
   // =========================================================================
   useEffect(() => {
     setLoading(true);
-    const notulenRef = ref(db, 'notulen');
+    // PERBAIKAN: Mengarah ke 'notes' sesuai database Bapak
+    const notesRef = ref(db, 'notes');
     
-    console.log("📡 Mencoba terhubung ke Firebase..."); // Radar 1
+    console.log("📡 Terhubung ke Firebase Node 'notes'...");
     
-    const unsubscribe = onValue(notulenRef, (snapshot) => {
-      console.log("📥 Respon dari Firebase:", snapshot.val()); // Radar 2
-
+    const unsubscribe = onValue(notesRef, (snapshot) => {
       if (snapshot.exists()) {
         const dataObj = snapshot.val();
+        
         const formattedData = Object.keys(dataObj).map(key => ({
           id: key,
           ...dataObj[key]
@@ -81,23 +73,19 @@ export default function DashboardPremium() {
         
         setData(sortedData);
       } else {
-        console.log("⚠️ Database terhubung, tapi folder 'notulen' masih KOSONG.");
         setData([]); 
       }
       setLoading(false);
     }, (error) => {
-      console.error("❌ GAGAL SINKRON:", error); // Radar 3 (Akan menangkap error jika Vercel gagal)
+      console.error("Gagal sinkronisasi dari Firebase:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
-  // =========================================================================
-  // SISTEM FILTER KHUSUS ADMIN (TIDAK BISA DITEMBUS TANPA PIN)
-  // =========================================================================
+
   const filteredData = useMemo(() => {
     return data.filter(item => {
-      // Jika bukan admin, dokumen berstatus 'rahasia' disembunyikan total
       if (!isAdmin && item.status === 'rahasia') return false;
 
       const matchSearch = (item.judul?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
@@ -114,7 +102,6 @@ export default function DashboardPremium() {
   const handleAdminToggle = () => {
     if (isAdmin) {
       setIsAdmin(false); 
-      // Reset filter jika admin logout agar data rahasia tidak nyangkut
       if (statusFilter === 'rahasia') setStatusFilter('all');
     } else {
       setShowPinModal(true);
@@ -134,16 +121,13 @@ export default function DashboardPremium() {
     }
   };
 
-  // =========================================================================
-  // HAPUS DATA PERMANEN DARI FIREBASE
-  // =========================================================================
   const confirmDelete = async () => {
     if (!deleteId) return;
     setIsDeleting(true);
     try {
-      const targetRef = ref(db, `notulen/${deleteId}`);
+      // PERBAIKAN: Menghapus data dari node 'notes'
+      const targetRef = ref(db, `notes/${deleteId}`);
       await remove(targetRef);
-      // Tidak perlu setData manual karena onValue (realtime) akan otomatis update UI
       setDeleteId(null);
     } catch (err) {
       console.error("Gagal menghapus data:", err);
@@ -152,7 +136,6 @@ export default function DashboardPremium() {
     }
   };
 
-  // ENGINE CETAK PDF (AUTO-BOLD & ALENIA)
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -169,16 +152,12 @@ export default function DashboardPremium() {
       
       return text.split('\n').filter(p => p.trim() !== '').map(p => {
         let cleanText = p.replace(/\*/g, '').trim();
-        
-        // Detektif Pintar: Cari awalan "1." (Utama) atau "a." (Anak Poin)
         let isMainPoint = /^\d+\.\s/.test(cleanText);
         let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
-        
-        // Aturan Visual: Poin Utama = Tebal & Spasi Atas | Anak Poin = Menjorok
         let paddingLeft = isSubPoint ? '28px' : '0px';
         let fontWeight = isMainPoint ? 'bold' : 'normal';
         let textTransform = isMainPoint ? 'uppercase' : 'none';
-        let marginTop = isMainPoint ? '14px' : '6px'; // Jarak agar tidak berdempetan
+        let marginTop = isMainPoint ? '14px' : '6px'; 
 
         return `<div style="page-break-inside: avoid; margin-top: ${marginTop}; margin-bottom: 4px; text-align: justify; line-height: 1.6; padding-left: ${paddingLeft}; font-weight: ${fontWeight}; text-transform: ${textTransform};">${cleanText}</div>`;
       }).join('');
@@ -245,8 +224,6 @@ export default function DashboardPremium() {
       try {
         const worker = (window as any).html2pdf().set(opt).from(document.getElementById('print-capture-area'));
         await worker.save();
-        const pdfBase64 = await worker.outputPdf('datauristring');
-        fetch('/api/upload-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdfBase64, fileName: opt.filename }) }).catch(()=>console.log("Drive bypass"));
       } catch (err) {
         console.error("PDF Error:", err);
       } finally {
@@ -275,10 +252,8 @@ export default function DashboardPremium() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      {/* TEMA PUTIH KUNING (Clean Bright Aesthetic) */}
       <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-800 pb-12 selection:bg-yellow-200">
         
-        {/* MODAL PIN ADMIN */}
         {showPinModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-7 w-full max-w-sm relative overflow-hidden shadow-2xl border border-slate-100">
@@ -310,7 +285,6 @@ export default function DashboardPremium() {
           </div>
         )}
 
-        {/* MODAL DELETE */}
         {deleteId && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm border border-red-100 shadow-2xl">
@@ -329,7 +303,6 @@ export default function DashboardPremium() {
           </div>
         )}
 
-        {/* TOP NAVBAR PUTIH KUNING */}
         <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 w-full shadow-sm">
           <div className="w-full max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -359,10 +332,8 @@ export default function DashboardPremium() {
           </div>
         </nav>
 
-        {/* KONTEN UTAMA */}
         <div className="w-full max-w-7xl mx-auto px-4 md:px-6 mt-8">
           
-          {/* KARTU STATISTIK */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-16 h-16 bg-slate-50 rounded-bl-full -mr-8 -mt-8"></div>
@@ -395,7 +366,6 @@ export default function DashboardPremium() {
             </div>
           </div>
 
-          {/* PENCARIAN & FILTER */}
           <div className="flex flex-col sm:flex-row gap-3 mb-8 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex-1 relative flex items-center">
               <svg className="w-5 h-5 text-slate-400 absolute left-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -417,13 +387,11 @@ export default function DashboardPremium() {
                 <option value="final">✅ Dokumen Final</option>
                 <option value="review">👁️ Tahap Review</option>
                 <option value="draft">📝 Status Draft</option>
-                {/* Opsi Rahasia HANYA MUNCUL JIKA ADMIN LOGIN */}
                 {isAdmin && <option value="rahasia">🔒 DOKUMEN RAHASIA</option>}
               </select>
             </div>
           </div>
 
-          {/* GRID KARTU NOTULEN (TEMA PUTIH KUNING + KONTEN BARU) */}
           {loading ? (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
              {[1, 2, 3].map(n => (
@@ -444,11 +412,9 @@ export default function DashboardPremium() {
               {paginatedData.map((item) => (
                 <div key={item.id} className={`bg-white rounded-2xl p-6 border ${item.status === 'rahasia' ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : 'border-slate-200 shadow-sm'} hover:shadow-xl hover:-translate-y-1 hover:border-yellow-400 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden`}>
                   
-                  {/* Garis Aksen Atas */}
                   <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.status === 'rahasia' ? 'bg-yellow-400' : 'bg-slate-200 group-hover:bg-yellow-400'} transition-colors`}></div>
                   
                   <div>
-                    {/* Header: Tanggal & Status */}
                     <div className="flex justify-between items-center mb-4 mt-1">
                       <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
                         <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
@@ -463,12 +429,10 @@ export default function DashboardPremium() {
                       </span>
                     </div>
                     
-                    {/* Judul Kegiatan */}
                     <h3 className="text-base font-extrabold text-slate-800 mb-3 leading-snug group-hover:text-yellow-600 transition-colors line-clamp-2">
                       {item.judul}
                     </h3>
                     
-                    {/* Agenda Kegiatan */}
                     {item.agenda && (
                       <div className="mb-4 flex items-start gap-2 text-xs text-slate-600 line-clamp-2">
                         <svg className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
@@ -476,7 +440,6 @@ export default function DashboardPremium() {
                       </div>
                     )}
 
-                    {/* Kesimpulan Singkat AI */}
                     <div className="mb-4 p-3.5 rounded-xl bg-yellow-50/50 border border-yellow-100 text-xs text-slate-700 line-clamp-3 relative">
                       <div className="flex items-center gap-1.5 mb-1.5">
                         <svg className="w-3.5 h-3.5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
@@ -488,10 +451,9 @@ export default function DashboardPremium() {
                     </div>
                   </div>
 
-                  {/* Tombol Aksi Bawah */}
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <div className="flex gap-2.5">
-                      <Link href={`/notulen/${item.id}`} className="flex-1 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5">
+                      <Link href={`/tambah?edit=${item.id}`} className="flex-1 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5">
                         Buka Detail
                       </Link>
                       <button 
@@ -504,7 +466,6 @@ export default function DashboardPremium() {
                       </button>
                     </div>
 
-                    {/* Menu Khusus Admin (Hanya muncul jika gembok terbuka) */}
                     {isAdmin && (
                       <div className="flex gap-2 mt-2.5 pt-2.5 border-t border-dashed border-slate-200 animate-fade-in">
                         <Link href={`/tambah?edit=${item.id}`} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase text-center hover:bg-slate-200 transition-colors tracking-wide">Edit Data</Link>
@@ -517,7 +478,6 @@ export default function DashboardPremium() {
             </div>
           )}
 
-          {/* PAGINATION */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 pt-2 pb-8">
               <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 hover:bg-slate-50 hover:text-yellow-500 transition-colors">
