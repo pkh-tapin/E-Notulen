@@ -5,14 +5,11 @@ import { useRouter } from 'next/router';
 
 // =========================================================================
 // IMPORT FIREBASE REALTIME DATABASE 
-// Path sudah disesuaikan dengan struktur folder src/lib/firebase.ts
+// Pastikan file firebase.ts ada di dalam folder src/lib/
 // =========================================================================
 import { ref, push, set, get, child, update } from 'firebase/database';
 import { db } from '../lib/firebase'; 
 
-// =========================================================================
-// BLUEPRINT TERKUNCI: FORM DATA INTERFACE
-// =========================================================================
 interface FormData {
   judul: string;
   tanggal: string;
@@ -55,16 +52,13 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // =========================================================================
-  // PATCH SINKRONISASI DATABASE: Sterilisasi [object Object] saat ditarik
-  // =========================================================================
   const detoxDB = (val: any) => {
     if (typeof val === 'string' && val.trim() === '[object Object]') return '';
     return val;
   };
 
   // =========================================================================
-  // BACA DATA DARI FIREBASE (JIKA MODE EDIT)
+  // BACA DATA JIKA MODE EDIT
   // =========================================================================
   useEffect(() => {
     if (editId) {
@@ -87,7 +81,7 @@ export default function TambahNotulen() {
           }
         })
         .catch((error) => {
-          console.error(error);
+          console.error("Error Fetch Edit:", error);
           showToast('❌ Gagal menarik data dari database.');
         });
     }
@@ -102,6 +96,9 @@ export default function TambahNotulen() {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
+  // =========================================================================
+  // LOGIKA REKAMAN SUARA & AI (TIDAK DIUBAH)
+  // =========================================================================
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -221,19 +218,12 @@ export default function TambahNotulen() {
         if (!finalIsi) finalIsi = cleanStr;
       }
 
-      // =========================================================================
-      // PENGHANCUR OBJEK REKURSIF BAWAAN ASLI ANDA
-      // =========================================================================
       const formatText = (val: any): string => {
         if (val === null || val === undefined) return '';
         if (typeof val === 'string') return String(val).replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
         if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-        if (Array.isArray(val)) {
-          return val.map(v => formatText(v)).join('\n');
-        }
-        if (typeof val === 'object') {
-          return Object.values(val).map(v => formatText(v)).join('\n\n');
-        }
+        if (Array.isArray(val)) return val.map(v => formatText(v)).join('\n');
+        if (typeof val === 'object') return Object.values(val).map(v => formatText(v)).join('\n\n');
         return String(val).trim();
       };
 
@@ -255,11 +245,11 @@ export default function TambahNotulen() {
   };
 
   // =========================================================================
-  // SIMPAN DATA KE FIREBASE
+  // SIMPAN KE FIREBASE (SINKRONISASI UTAMA)
   // =========================================================================
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
-      showToast('⚠️ IDENTIFIKASI GAGAL: Judul dan Tanggal Wajib Diisi!');
+      showToast('⚠️ Judul dan Tanggal Wajib Diisi!');
       return;
     }
 
@@ -288,14 +278,14 @@ export default function TambahNotulen() {
       let targetId = editId as string;
 
       if (isEdit && editId) {
-        // MODE EDIT: Update node yang sudah ada di database
+        // UPDATE DATA
         const notulenRef = ref(db, `notulen/${editId}`);
         await update(notulenRef, payload);
       } else {
-        // MODE BARU: Push data baru ke database
+        // SIMPAN BARU
         const notulenListRef = ref(db, 'notulen');
         const newNotulenRef = push(notulenListRef);
-        targetId = newNotulenRef.key as string; // Ambil ID unik yang dibuat Firebase
+        targetId = newNotulenRef.key as string;
         
         await set(newNotulenRef, {
           ...payload,
@@ -303,13 +293,15 @@ export default function TambahNotulen() {
         });
       }
 
-      showToast('✅ PROTOKOL PENYIMPANAN BERHASIL!');
+      showToast('✅ Tersimpan! Sinkronisasi Database Berhasil.');
+      console.log("SUKSES SINKRON FIREBASE. ID:", targetId);
       
-      // Redirect ke halaman detail menggunakan ID dari Firebase
-      setTimeout(() => router.push(`/notulen/${targetId}`), 1500);
+      // Kembali ke halaman dashboard (agar user langsung melihat datanya muncul)
+      setTimeout(() => router.push(`/`), 1500);
       
     } catch (err: any) {
-      showToast(`🚨 SISTEM ERROR: ${err.message}`);
+      console.error("FIREBASE ERROR:", err);
+      showToast(`🚨 SISTEM ERROR: Cek Koneksi Database.`);
     } finally {
       setSaving(false);
     }
@@ -321,48 +313,48 @@ export default function TambahNotulen() {
   return (
     <>
       <Head>
-        <title>{isEdit ? 'Re-Build' : 'Initialize'} Core — NotulenAI V4</title>
+        <title>{isEdit ? 'Edit Notulen' : 'Buat Baru'} - AI NOTE TAPIN</title>
       </Head>
 
-      <div className="min-h-screen bg-[#020617] overflow-x-hidden w-full text-slate-200 font-sans selection:bg-cyan-500/30">
+      {/* TEMA PUTIH KUNING */}
+      <div className="min-h-screen bg-slate-50 overflow-x-hidden w-full text-slate-800 font-sans selection:bg-yellow-200">
         
-        {/* TOAST NOTIFICATION MODEREN */}
+        {/* TOAST NOTIFICATION */}
         {toast && (
-          <div className="fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl text-sm font-bold animate-bounce backdrop-blur-2xl transition-all"
-            style={{ background: 'rgba(2, 6, 23, 0.8)', border: '1px solid rgba(34, 211, 238, 0.5)', boxShadow: '0 10px 40px -10px rgba(34,211,238,0.5)' }}>
-            <div className="flex items-center gap-3 text-cyan-300">
-              <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+          <div className="fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl text-sm font-bold animate-bounce backdrop-blur-xl transition-all bg-white border border-yellow-400 shadow-xl">
+            <div className="flex items-center gap-3 text-slate-800">
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500 animate-ping" />
               {toast}
             </div>
           </div>
         )}
 
-        {/* NAVBAR CYBERPUNK */}
-        <nav className="border-b border-cyan-900/40 sticky top-0 z-40 backdrop-blur-2xl bg-[#020617]/80 w-full">
-          <div className="w-full max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        {/* NAVBAR KUNING PUTIH */}
+        <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 w-full shadow-sm">
+          <div className="w-full max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900/50 border border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-all group">
+              <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 hover:text-yellow-600 hover:border-yellow-400 transition-all group">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5 group-hover:-translate-x-1 transition-transform">
                   <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </Link>
               <div className="flex flex-col">
-                <span className="font-mono text-[10px] font-bold text-cyan-500 tracking-[0.2em] uppercase">
+                <span className="font-mono text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase">
                   Secure Connection
                 </span>
-                <span className="font-bold text-lg tracking-wide text-white flex items-center gap-2">
-                  {isEdit ? 'EDIT' : 'NEW'} <span className="text-cyan-400">BLUEPRINT</span>
+                <span className="font-extrabold text-sm sm:text-base tracking-wide text-slate-800 uppercase flex items-center gap-1.5">
+                  {isEdit ? 'EDIT' : 'NEW'} <span className="text-yellow-500">BLUEPRINT</span>
                 </span>
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
               <button onClick={() => handleSave('draft')} disabled={saving}
-                className="hidden sm:block px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all bg-slate-900/50 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
-                Save Draft
+                className="hidden sm:block px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300">
+                Simpan Draft
               </button>
               <button onClick={() => handleSave('final')} disabled={saving}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all bg-cyan-500 text-slate-950 hover:bg-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)]">
-                {saving ? 'Encrypting...' : 'Deploy Final'}
+                className="px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md shadow-yellow-400/30 active:scale-95">
+                {saving ? 'Menyimpan...' : 'Deploy Final'}
               </button>
             </div>
           </div>
@@ -371,106 +363,107 @@ export default function TambahNotulen() {
         <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* KOLOM KIRI */}
-          <div className="lg:col-span-5 space-y-8">
+          <div className="lg:col-span-5 space-y-6">
             
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#0f172a] to-[#020617] border border-slate-800 shadow-2xl">
-              <div className="absolute top-0 left-8 w-32 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
-              <h2 className="text-sm font-bold text-white tracking-widest mb-6 flex items-center gap-3 uppercase">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
+              <h2 className="text-sm font-extrabold text-slate-800 tracking-widest mb-6 flex items-center gap-3 uppercase">
+                <div className="w-8 h-8 rounded-lg bg-yellow-50 border border-yellow-200 flex items-center justify-center text-yellow-500">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 </div>
                 Metadata Rapat
               </h2>
               
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Judul Dokumen *</label>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Judul Dokumen *</label>
                   <input type="text" value={form.judul} onChange={e => setField('judul', e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white placeholder-slate-600 outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all" />
+                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Tanggal *</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Tanggal *</label>
                     <input type="date" value={form.tanggal} onChange={e => setField('tanggal', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Lokasi</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Lokasi</label>
                     <input type="text" value={form.tempat} onChange={e => setField('tempat', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-600 outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 placeholder-slate-400 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Mulai</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Mulai</label>
                     <input type="time" value={form.waktu_mulai} onChange={e => setField('waktu_mulai', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Selesai</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Selesai</label>
                     <input type="time" value={form.waktu_selesai} onChange={e => setField('waktu_selesai', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Pimpinan Rapat</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Pimpinan Rapat</label>
                     <input type="text" value={form.pimpinan_rapat} onChange={e => setField('pimpinan_rapat', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                   <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Notulis</label>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Notulis</label>
                     <input type="text" value={form.notulis} onChange={e => setField('notulis', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
+                      className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Daftar Peserta</label>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Daftar Peserta</label>
                   <textarea value={form.peserta} onChange={e => setField('peserta', e.target.value)}
-                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all text-justify whitespace-pre-wrap" style={{ fontFamily: 'inherit' }} />
+                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 outline-none resize-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all text-justify whitespace-pre-wrap" />
                 </div>
                 <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Agenda Utama</label>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Agenda Utama</label>
                   <textarea value={form.agenda} onChange={e => setField('agenda', e.target.value)}
-                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all text-justify whitespace-pre-wrap" style={{ fontFamily: 'inherit' }} />
+                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-slate-800 outline-none resize-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all text-justify whitespace-pre-wrap" />
                 </div>
               </div>
             </div>
 
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#1e1423] to-[#020617] border border-fuchsia-900/50 shadow-2xl">
-              <div className="absolute top-0 right-8 w-32 h-[1px] bg-gradient-to-r from-transparent via-fuchsia-500 to-transparent"></div>
+            {/* AI NEURAL LINK - VERSI KUNING */}
+            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-16 h-16 bg-orange-50 rounded-bl-full -z-0"></div>
               
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-sm font-bold text-white tracking-widest flex items-center gap-3 uppercase">
-                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center">
-                    <span className={`w-2 h-2 rounded-full ${recording ? 'bg-red-500 animate-ping' : 'bg-fuchsia-400'}`} />
+              <div className="flex justify-between items-center mb-5 relative z-10">
+                <h2 className="text-sm font-extrabold text-slate-800 tracking-widest flex items-center gap-3 uppercase">
+                  <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200 flex items-center justify-center">
+                    <span className={`w-2.5 h-2.5 rounded-full ${recording ? 'bg-red-500 animate-ping' : 'bg-orange-500'}`} />
                   </div>
-                  Voice Neural Link
+                  Voice AI Link
                 </h2>
-                <span className="text-[10px] font-mono text-fuchsia-300 bg-fuchsia-950/50 border border-fuchsia-900 px-3 py-1 rounded-full">
+                <span className="text-[10px] font-mono text-orange-600 bg-orange-50 border border-orange-200 px-3 py-1 rounded-full font-bold">
                   {countWords(form.raw_transcript)} Words
                 </span>
               </div>
               
-              <div className="flex gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-3 mb-5 relative z-10">
                 {!recording ? (
                   <button onClick={startRecording} disabled={aiLoading}
-                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 hover:border-fuchsia-400 disabled:opacity-30">
-                    🎙️ Record Audio
+                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-white border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-400 disabled:opacity-50">
+                    🎙️ Rekam Audio
                   </button>
                 ) : (
                   <button onClick={stopRecording}
-                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-500/20 border border-red-500 text-red-200 animate-pulse">
+                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-50 border-2 border-red-500 text-red-600 animate-pulse">
                     ⏹️ Stop • {formatTime(recordingTime)}
                   </button>
                 )}
 
                 <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript.trim()}
-                  className="flex-1 flex justify-center items-center gap-2 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:pointer-events-none bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] hover:scale-[1.02]">
+                  className="flex-1 flex justify-center items-center gap-2 px-4 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl active:scale-95">
                   {aiLoading ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
@@ -480,36 +473,36 @@ export default function TambahNotulen() {
               </div>
 
               {aiStep && (
-                <div className="mb-6 px-4 py-3 rounded-xl text-xs font-mono text-fuchsia-300 bg-fuchsia-950/40 border border-fuchsia-900/50 animate-pulse flex items-center gap-3">
-                  <span className="w-2 h-2 rounded-full bg-fuchsia-400 animate-ping" />
+                <div className="mb-5 px-4 py-3 rounded-xl text-xs font-mono font-bold text-orange-600 bg-orange-50 border border-orange-200 animate-pulse flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping" />
                   {aiStep}
                 </div>
               )}
 
-              <div>
+              <div className="relative z-10">
                 <textarea value={form.raw_transcript} onChange={e => setField('raw_transcript', e.target.value)}
-                  placeholder="Injeksi data teks mentah atau hasil rekaman rapat Anda ke sini..."
-                  rows={6} className="w-full px-5 py-4 rounded-xl text-sm font-mono text-slate-300 placeholder-slate-700 outline-none resize-none bg-[#0a0f1e] border border-fuchsia-900/30 focus:border-fuchsia-500/50 transition-all leading-relaxed" />
+                  placeholder="Ketik teks mentah atau hasil rekaman rapat Anda ke sini untuk diproses AI..."
+                  rows={6} className="w-full px-5 py-4 rounded-xl text-sm font-mono text-slate-600 placeholder-slate-400 outline-none resize-none bg-slate-50 border border-slate-200 focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20 transition-all leading-relaxed" />
               </div>
             </div>
           </div>
 
           {/* KOLOM KANAN: DASHBOARD OUTPUT */}
-          <div className="lg:col-span-7 space-y-8">
+          <div className="lg:col-span-7 space-y-6">
             
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#0a191e] to-[#020617] border border-emerald-900/50 shadow-2xl">
-              <div className="absolute top-0 right-1/2 translate-x-1/2 w-48 h-[1px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></div>
+            <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-1/2 translate-x-1/2 w-48 h-1.5 bg-yellow-400"></div>
               
-              <div className="flex justify-between items-center mb-8 border-b border-emerald-900/30 pb-5">
-                <h2 className="text-sm font-bold text-white tracking-widest flex items-center gap-3 uppercase">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-5">
+                <h2 className="text-sm font-extrabold text-slate-800 tracking-widest flex items-center gap-3 uppercase">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
-                  Realtime Output Matrix
+                  Output Notulensi
                 </h2>
                 <div className="flex gap-2">
-                  <span className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                    🟢 Sync Active
+                  <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-3 py-1.5 rounded-full uppercase tracking-widest">
+                    🟢 Ready
                   </span>
                 </div>
               </div>
@@ -517,36 +510,36 @@ export default function TambahNotulen() {
               <div className="space-y-6">
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Isi Pembahasan Lengkap</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.isi_notulen)} W</span>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em]">Isi Pembahasan Lengkap</label>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">{countWords(form.isi_notulen)} W</span>
                   </div>
                   <textarea value={form.isi_notulen} onChange={e => setField('isi_notulen', e.target.value)}
-                    rows={12} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-loose whitespace-pre-wrap text-justify shadow-inner" />
+                    rows={12} className="w-full px-5 py-4 rounded-xl text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all leading-loose whitespace-pre-wrap text-justify shadow-inner" />
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Kesimpulan Eksekutif</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.kesimpulan)} W</span>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em]">Kesimpulan Eksekutif</label>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">{countWords(form.kesimpulan)} W</span>
                   </div>
                   <textarea value={form.kesimpulan} onChange={e => setField('kesimpulan', e.target.value)}
-                    rows={4} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
+                    rows={4} className="w-full px-5 py-4 rounded-xl text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
                 </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Tindak Lanjut & Timeline</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.tindak_lanjut)} W</span>
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-[0.15em]">Tindak Lanjut & Timeline</label>
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-50 border border-slate-100 px-2 py-0.5 rounded">{countWords(form.tindak_lanjut)} W</span>
                   </div>
                   <textarea value={form.tindak_lanjut} onChange={e => setField('tindak_lanjut', e.target.value)}
-                    rows={4} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
+                    rows={4} className="w-full px-5 py-4 rounded-xl text-sm text-slate-800 outline-none bg-slate-50 border border-slate-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
                 </div>
 
-                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center pt-6 mt-4 border-t border-emerald-900/30 gap-4">
+                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center pt-6 mt-4 border-t border-slate-100 gap-4">
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-widest">Document Status</span>
+                    <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-widest">Status Dokumen</span>
                     <select value={form.status} onChange={e => setField('status', e.target.value)}
-                      className="px-4 py-2 rounded-lg text-xs font-bold outline-none bg-slate-900/80 border border-slate-700 text-white focus:border-emerald-500 transition-colors appearance-none cursor-pointer">
+                      className="px-4 py-2.5 rounded-lg text-xs font-bold outline-none bg-slate-50 border border-slate-200 text-slate-700 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all appearance-none cursor-pointer">
                       <option value="draft">📝 DRAFT</option>
                       <option value="review">👁️ IN REVIEW</option>
                       <option value="final">✅ FINALIZED</option>
@@ -554,8 +547,8 @@ export default function TambahNotulen() {
                   </div>
                   
                   <button onClick={() => handleSave()} disabled={saving}
-                    className="px-8 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-center transition-all bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 disabled:opacity-50">
-                    {saving ? 'Syncing to Core...' : '💾 Secure Database Sync'}
+                    className="px-8 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest text-center transition-all bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md shadow-yellow-400/30 active:scale-95 disabled:opacity-50">
+                    {saving ? 'Syncing...' : '💾 Simpan & Sinkron'}
                   </button>
                 </div>
 
