@@ -5,10 +5,10 @@ import { useRouter } from 'next/router';
 
 // =========================================================================
 // IMPORT FIREBASE REALTIME DATABASE 
-// (PASTIKAN PATH '../firebase' SESUAI DENGAN LOKASI FILE firebase.ts ANDA!)
+// Path sudah disesuaikan dengan struktur folder src/lib/firebase.ts
 // =========================================================================
 import { ref, push, set, get, child, update } from 'firebase/database';
-import { db } from '../firebase'; 
+import { db } from '../lib/firebase'; 
 
 // =========================================================================
 // BLUEPRINT TERKUNCI: FORM DATA INTERFACE
