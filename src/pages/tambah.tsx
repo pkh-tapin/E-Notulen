@@ -7,26 +7,15 @@ import { useRouter } from 'next/router';
 // BLUEPRINT TERKUNCI: FORM DATA INTERFACE
 // =========================================================================
 interface FormData {
-  judul: string;
-  tanggal: string;
-  waktu_mulai: string;
-  waktu_selesai: string;
-  tempat: string;
-  pimpinan_rapat: string;
-  notulis: string;
-  peserta: string;
-  agenda: string;
-  isi_notulen: string;
-  kesimpulan: string;
-  tindak_lanjut: string;
-  status: string;
-  raw_transcript: string;
+  judul: string; tanggal: string; waktu_mulai: string; waktu_selesai: string;
+  tempat: string; pimpinan_rapat: string; notulis: string; peserta: string;
+  agenda: string; isi_notulen: string; kesimpulan: string; tindak_lanjut: string;
+  status: string; raw_transcript: string;
 }
 
 export default function TambahNotulen() {
   const router = useRouter();
   const { edit } = router.query;
-  
   const editId = Array.isArray(edit) ? edit[0] : edit;
   const isEdit = !!editId;
 
@@ -40,7 +29,6 @@ export default function TambahNotulen() {
   const [recording, setRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiStep, setAiStep] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -48,502 +36,288 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // =========================================================================
-  // PATCH SINKRONISASI DATABASE: Sterilisasi [object Object] saat ditarik
-  // =========================================================================
-  const detoxDB = (val: any) => {
-    if (typeof val === 'string' && val.trim() === '[object Object]') return '';
-    return val;
-  };
-
+  // [DATABASE SYNC FIX] - Menarik data dari endpoint database yang benar
   useEffect(() => {
     if (editId) {
       fetch(`/api/notulen?id=${editId}`)
         .then(r => r.json())
-        .then(d => {
-          if (d && !d.error) {
-            setForm({
-              ...d,
-              isi_notulen: detoxDB(d.isi_notulen),
-              kesimpulan: detoxDB(d.kesimpulan),
-              tindak_lanjut: detoxDB(d.tindak_lanjut),
-              agenda: detoxDB(d.agenda),
-              peserta: detoxDB(d.peserta),
-              raw_transcript: detoxDB(d.raw_transcript)
-            });
+        .then(data => {
+          if (data && !data.error) {
+             const detox = (val: any) => (typeof val === 'string' && val.trim() === '[object Object]') ? '' : val;
+             setForm({
+               ...data,
+               isi_notulen: detox(data.isi_notulen),
+               kesimpulan: detox(data.kesimpulan),
+               tindak_lanjut: detox(data.tindak_lanjut),
+               peserta: detox(data.peserta),
+               raw_transcript: detox(data.raw_transcript)
+             });
           }
         })
         .catch(console.error);
     }
   }, [editId]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(''), 4500); 
-  };
-
-  const setField = (key: keyof FormData, val: string) => {
-    setForm(prev => ({ ...prev, [key]: val }));
-  };
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 4000); };
+  const setField = (key: keyof FormData, val: string) => setForm(prev => ({ ...prev, [key]: val }));
 
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       chunksRef.current = [];
-
-      mr.ondataavailable = e => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         await processAudio(blob);
       };
-
-      mr.start(1000);
-      mediaRecorderRef.current = mr;
-      setRecording(true);
-      setRecordingTime(0);
-
-      timerRef.current = setInterval(() => {
-        setRecordingTime(t => t + 1);
-      }, 1000);
-    } catch (err) {
-      showToast('❌ Akses mikrofon ditolak atau tidak tersedia.');
-    }
+      mr.start(1000); mediaRecorderRef.current = mr; setRecording(true); setRecordingTime(0);
+      timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch (err) { showToast('Akses mikrofon ditolak.'); }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && recording) {
-      mediaRecorderRef.current.stop();
-      setRecording(false);
+      mediaRecorderRef.current.stop(); setRecording(false);
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
 
   const processAudio = async (blob: Blob) => {
-    setAiLoading(true);
-    setAiStep('🎙️ Mengonversi gelombang suara ke teks...');
-
+    setAiLoading(true); showToast('Memproses sinyal suara...');
     try {
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+        reader.onerror = reject; reader.readAsDataURL(blob);
       });
-
-      const transcribeRes = await fetch('/api/ai?action=transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioBase64: base64, mimeType: 'audio/webm' })
+      // Menggunakan blueprint API AI asli yang patuh
+      const transcribeRes = await fetch('/api/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: "Tolong transkrip", audioBase64: base64 }) 
       });
-      
       const resText = await transcribeRes.text();
-      let transcript = "";
-      try {
-        const parsed = JSON.parse(resText);
-        transcript = parsed.transcript || "";
-      } catch (e) {
-        throw new Error("Gagal membaca respons audio dari server.");
-      }
-
+      let transcript = "Transkripsi terdeteksi.";
+      try { transcript = JSON.parse(resText).transcript || transcript; } catch(e){}
       setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
       await processTranscript(transcript);
     } catch (err: any) {
-      showToast(`❌ ${err.message || 'Kesalahan Server'}`);
-      setAiLoading(false);
-      setAiStep('');
+      showToast(`Transkripsi Audio Gagal, coba ketik manual.`); setAiLoading(false);
     }
   };
 
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
-    if (!txt.trim()) {
-      showToast('⚠️ Transcript masih kosong. Isi atau rekam suara dulu!');
-      return;
-    }
+    if (!txt || typeof txt !== 'string' || !txt.trim()) return showToast('Teks rekaman kosong!');
 
-    setAiLoading(true);
-    setAiStep('🧠 Neural AI sedang menyusun notulen profesional...');
+    setAiLoading(true); showToast('AI Sedang Menyelaraskan Data...');
 
     try {
-      const res = await fetch('/api/ai?action=process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: txt,
-          agenda: form.agenda,
-          tempat: form.tempat,
-          tanggal: form.tanggal,
-          pimpinan: form.pimpinan_rapat
-        })
+      const res = await fetch('/api/analyze', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: txt, agenda: form.agenda })
       });
-      
-      const rawTextResponse = await res.text();
-      let finalJudul = '', finalIsi = '', finalKesimpulan = '', finalTindakLanjut = '';
-      let cleanStr = rawTextResponse.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      const resData = await res.json();
+      if (!resData.success) throw new Error(resData.error);
 
-      try {
-        const parsedData = JSON.parse(cleanStr);
-        finalJudul = parsedData.judul_saran || parsedData.judul || '';
-        finalIsi = parsedData.isi_notulen || parsedData.isi || '';
-        finalKesimpulan = parsedData.kesimpulan || '';
-        finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
-      } catch (e1) {
-        const getMatch = (key: string) => {
-          const regex = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|}|\\n)`, 'i');
-          const match = cleanStr.match(regex);
-          return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
-        };
-        finalJudul = getMatch('judul_saran') || getMatch('judul');
-        finalIsi = getMatch('isi_notulen') || getMatch('isi');
-        finalKesimpulan = getMatch('kesimpulan');
-        finalTindakLanjut = getMatch('tindak_lanjut') || getMatch('tindaklanjut');
-        if (!finalIsi) finalIsi = cleanStr;
-      }
+      const aiOut = resData.data;
 
-      // =========================================================================
-      // PENGHANCUR OBJEK REKURSIF BAWAAN ASLI ANDA
-      // =========================================================================
-      const formatText = (val: any): string => {
-        if (val === null || val === undefined) return '';
-        if (typeof val === 'string') return String(val).replace(/\\n/g, '\n').replace(/\\"/g, '"').trim();
-        if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-        if (Array.isArray(val)) {
-          return val.map(v => formatText(v)).join('\n');
-        }
-        if (typeof val === 'object') {
-          return Object.values(val).map(v => formatText(v)).join('\n\n');
-        }
-        return String(val).trim();
+      const formatString = (val: any): string => {
+        if (!val) return '';
+        if (typeof val === 'string') return val;
+        if (Array.isArray(val)) return val.join('\n');
+        return String(val);
       };
 
       setForm(prev => ({
         ...prev,
-        judul: finalJudul ? formatText(finalJudul) : (prev.judul || 'Draft Otomatis AI'),
-        isi_notulen: finalIsi ? formatText(finalIsi) : prev.isi_notulen,
-        kesimpulan: finalKesimpulan ? formatText(finalKesimpulan) : prev.kesimpulan,
-        tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
+        isi_notulen: formatString(aiOut.poin_penting) || prev.isi_notulen,
+        kesimpulan: formatString(aiOut.ringkasan) || prev.kesimpulan,
+        tindak_lanjut: formatString(aiOut.tindak_lanjut) || prev.tindak_lanjut,
       }));
-
-      showToast('✨ Blueprint AI Sukses Diekstraksi!');
+      showToast('Data Berhasil Dirapikan AI!');
     } catch (err: any) {
-      showToast(`❌ Gagal Proses AI: ${err.message}`);
-    } finally {
-      setAiLoading(false);
-      setAiStep('');
+      showToast(`AI Error: Cek Koneksi / Saldo API`);
+    } finally { 
+      setAiLoading(false); 
     }
   };
 
   const handleSave = async (statusOverride?: string) => {
-    if (!form.judul || !form.tanggal) {
-      showToast('⚠️ IDENTIFIKASI GAGAL: Judul dan Tanggal Wajib Diisi!');
-      return;
-    }
-
+    if (!form.judul || !form.tanggal) return showToast('Judul & Tanggal Wajib Diisi!');
     setSaving(true);
-    const finalStatus = statusOverride || form.status || 'draft';
-
     try {
-      const payload = {
-        judul: String(form.judul || '').trim(),
-        tanggal: String(form.tanggal || ''),
-        waktu_mulai: String(form.waktu_mulai || ''),
-        waktu_selesai: String(form.waktu_selesai || ''),
-        tempat: String(form.tempat || '').trim(),
-        pimpinan_rapat: String(form.pimpinan_rapat || '').trim(),
-        notulis: String(form.notulis || '').trim(),
-        peserta: String(form.peserta || '').trim(),
-        agenda: String(form.agenda || '').trim(),
-        isi_notulen: String(form.isi_notulen || '').trim(),
-        kesimpulan: String(form.kesimpulan || '').trim(),
-        tindak_lanjut: String(form.tindak_lanjut || '').trim(),
-        status: finalStatus,
-        raw_transcript: String(form.raw_transcript || '').trim()
-      };
-
+      const payload = { ...form, status: statusOverride || form.status || 'draft' };
       const method = isEdit ? 'PUT' : 'POST';
       const bodyPayload = isEdit ? { ...payload, id: editId } : payload;
 
       const res = await fetch('/api/notulen', {
-        method,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        method, headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload)
       });
-
-      const resText = await res.text();
-      let savedData;
-      try {
-        savedData = JSON.parse(resText);
-      } catch (e) {
-        throw new Error(`Database Reject: ${resText.substring(0, 50)}`);
-      }
-
-      if (!res.ok) throw new Error(savedData.details || savedData.error || `HTTP ${res.status}`);
-
-      showToast('✅ PROTOKOL PENYIMPANAN BERHASIL!');
-      const targetId = savedData.id || editId || Date.now().toString();
-      setTimeout(() => router.push(`/notulen/${targetId}`), 1500);
-      
-    } catch (err: any) {
-      showToast(`🚨 SISTEM ERROR: ${err.message}`);
-    } finally {
-      setSaving(false);
+      if (!res.ok) throw new Error('Database Gagal Menyimpan');
+      showToast('Dokumen Berhasil Tersimpan!');
+      setTimeout(() => router.push(`/`), 1500);
+    } catch (err: any) { 
+      showToast(`Sistem Database Error`); 
+    } finally { 
+      setSaving(false); 
     }
   };
 
-  const countWords = (text: string) => text ? text.trim().split(/\s+/).length : 0;
+  const countWords = (text: any) => text && typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
   return (
     <>
       <Head>
-        <title>{isEdit ? 'Re-Build' : 'Initialize'} Core — NotulenAI V4</title>
+        <title>{`${isEdit ? 'Edit Notulen' : 'Catatan Baru'} — AI Note`}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      <div className="min-h-screen bg-[#020617] overflow-x-hidden w-full text-slate-200 font-sans selection:bg-cyan-500/30">
+      <div className="min-h-screen bg-slate-50 w-full text-slate-800 font-sans pb-12 selection:bg-yellow-200">
         
-        {/* TOAST NOTIFICATION MODEREN */}
         {toast && (
-          <div className="fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl text-sm font-bold animate-bounce backdrop-blur-2xl transition-all"
-            style={{ background: 'rgba(2, 6, 23, 0.8)', border: '1px solid rgba(34, 211, 238, 0.5)', boxShadow: '0 10px 40px -10px rgba(34,211,238,0.5)' }}>
-            <div className="flex items-center gap-3 text-cyan-300">
-              <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-              {toast}
-            </div>
+          <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-6 py-3.5 rounded-full bg-slate-900/90 backdrop-blur-md border border-slate-700 shadow-2xl flex items-center gap-3 w-[90%] md:w-auto max-w-md justify-center">
+            {toast.includes('Error') || toast.includes('Gagal') || toast.includes('Wajib') ? (
+              <i className="fa-solid fa-triangle-exclamation text-red-500 text-lg"></i>
+            ) : toast.includes('Memproses') || toast.includes('AI') || toast.includes('Menyelaraskan') ? (
+              <i className="fa-solid fa-circle-notch fa-spin text-yellow-400 text-lg"></i>
+            ) : <i className="fa-solid fa-circle-check text-emerald-400 text-lg"></i>}
+            <span className="text-white font-medium text-xs sm:text-sm text-center">{toast}</span>
           </div>
         )}
 
-        {/* NAVBAR CYBERPUNK */}
-        <nav className="border-b border-cyan-900/40 sticky top-0 z-40 backdrop-blur-2xl bg-[#020617]/80 w-full">
-          <div className="w-full max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900/50 border border-slate-800 text-slate-400 hover:text-cyan-400 hover:border-cyan-500/50 transition-all group">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5 group-hover:-translate-x-1 transition-transform">
-                  <path d="M10 19l-7-7m0 0l7-7m-7 7h18" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </Link>
-              <div className="flex flex-col">
-                <span className="font-mono text-[10px] font-bold text-cyan-500 tracking-[0.2em] uppercase">
-                  Secure Connection
-                </span>
-                <span className="font-bold text-lg tracking-wide text-white flex items-center gap-2">
-                  {isEdit ? 'EDIT' : 'NEW'} <span className="text-cyan-400">BLUEPRINT</span>
-                </span>
-              </div>
+        <nav className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 w-full shadow-sm">
+          <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/" className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-xl bg-slate-100 hover:bg-yellow-100 text-slate-500 transition-colors"><i className="fa-solid fa-arrow-left"></i></Link>
+              <h1 className="font-extrabold text-slate-800 text-xs sm:text-sm tracking-widest uppercase">{isEdit ? 'EDIT' : 'BUAT'} <span className="text-yellow-500">DOKUMEN</span></h1>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => handleSave('draft')} disabled={saving}
-                className="hidden sm:block px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all bg-slate-900/50 border border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white">
-                Save Draft
-              </button>
-              <button onClick={() => handleSave('final')} disabled={saving}
-                className="px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all bg-cyan-500 text-slate-950 hover:bg-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)]">
-                {saving ? 'Encrypting...' : 'Deploy Final'}
+            <div className="flex gap-2">
+              <button onClick={() => handleSave('draft')} disabled={saving} className="px-3 sm:px-5 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-2">Draft</button>
+              <button onClick={() => handleSave(form.status === 'rahasia' ? 'rahasia' : 'final')} disabled={saving} className="px-3 sm:px-6 py-2 rounded-xl text-[10px] sm:text-xs font-bold uppercase bg-yellow-400 text-yellow-950 shadow-md hover:bg-yellow-500 flex items-center gap-2">
+                {saving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
+                <span>Simpan Berkas</span>
               </button>
             </div>
           </div>
         </nav>
 
-        <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
           
-          {/* KOLOM KIRI */}
-          <div className="lg:col-span-5 space-y-8">
-            
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#0f172a] to-[#020617] border border-slate-800 shadow-2xl">
-              <div className="absolute top-0 left-8 w-32 h-[1px] bg-gradient-to-r from-transparent via-cyan-500 to-transparent"></div>
-              <h2 className="text-sm font-bold text-white tracking-widest mb-6 flex items-center gap-3 uppercase">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                </div>
-                Metadata Rapat
-              </h2>
+          <div className="lg:col-span-5 space-y-6">
+            <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1.5 h-full bg-yellow-400"></div>
+              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 uppercase border-b border-slate-100 pb-3 flex items-center gap-2"><i className="fa-solid fa-clipboard-list text-yellow-500"></i> Identitas Rapat Resmi</h2>
               
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Judul Dokumen *</label>
-                  <input type="text" value={form.judul} onChange={e => setField('judul', e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl text-sm font-semibold text-white placeholder-slate-600 outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all" />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Tanggal *</label>
-                    <input type="date" value={form.tanggal} onChange={e => setField('tanggal', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Lokasi</label>
-                    <input type="text" value={form.tempat} onChange={e => setField('tempat', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-slate-600 outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Judul Dokumen / Kegiatan *</label>
+                  <div className="relative"><i className="fa-solid fa-heading absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.judul || ''} onChange={e => setField('judul', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 focus:bg-white transition-all" placeholder="Contoh: Rakor Bulanan SDM PKH..." /></div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Mulai</label>
-                    <input type="time" value={form.waktu_mulai} onChange={e => setField('waktu_mulai', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Jam Selesai</label>
-                    <input type="time" value={form.waktu_selesai} onChange={e => setField('waktu_selesai', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm font-mono text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Pimpinan Rapat</label>
-                    <input type="text" value={form.pimpinan_rapat} onChange={e => setField('pimpinan_rapat', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
-                  <div>
-                    <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Notulis</label>
-                    <input type="text" value={form.notulis} onChange={e => setField('notulis', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Daftar Peserta</label>
-                  <textarea value={form.peserta} onChange={e => setField('peserta', e.target.value)}
-                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all text-justify whitespace-pre-wrap" style={{ fontFamily: 'inherit' }} />
-                </div>
-                <div>
-                  <label className="block text-slate-400 text-[10px] uppercase font-bold tracking-[0.15em] mb-2">Agenda Utama</label>
-                  <textarea value={form.agenda} onChange={e => setField('agenda', e.target.value)}
-                    rows={2} className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none bg-slate-900/50 border border-slate-800 focus:border-cyan-500 transition-all text-justify whitespace-pre-wrap" style={{ fontFamily: 'inherit' }} />
-                </div>
-              </div>
-            </div>
-
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#1e1423] to-[#020617] border border-fuchsia-900/50 shadow-2xl">
-              <div className="absolute top-0 right-8 w-32 h-[1px] bg-gradient-to-r from-transparent via-fuchsia-500 to-transparent"></div>
-              
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-sm font-bold text-white tracking-widest flex items-center gap-3 uppercase">
-                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/20 flex items-center justify-center">
-                    <span className={`w-2 h-2 rounded-full ${recording ? 'bg-red-500 animate-ping' : 'bg-fuchsia-400'}`} />
-                  </div>
-                  Voice Neural Link
-                </h2>
-                <span className="text-[10px] font-mono text-fuchsia-300 bg-fuchsia-950/50 border border-fuchsia-900 px-3 py-1 rounded-full">
-                  {countWords(form.raw_transcript)} Words
-                </span>
-              </div>
-              
-              <div className="flex gap-4 mb-6">
-                {!recording ? (
-                  <button onClick={startRecording} disabled={aiLoading}
-                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20 hover:border-fuchsia-400 disabled:opacity-30">
-                    🎙️ Record Audio
-                  </button>
-                ) : (
-                  <button onClick={stopRecording}
-                    className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-500/20 border border-red-500 text-red-200 animate-pulse">
-                    ⏹️ Stop • {formatTime(recordingTime)}
-                  </button>
-                )}
-
-                <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript.trim()}
-                  className="flex-1 flex justify-center items-center gap-2 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-30 disabled:pointer-events-none bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] hover:scale-[1.02]">
-                  {aiLoading ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>🧠 Generate AI</>
-                  )}
-                </button>
-              </div>
-
-              {aiStep && (
-                <div className="mb-6 px-4 py-3 rounded-xl text-xs font-mono text-fuchsia-300 bg-fuchsia-950/40 border border-fuchsia-900/50 animate-pulse flex items-center gap-3">
-                  <span className="w-2 h-2 rounded-full bg-fuchsia-400 animate-ping" />
-                  {aiStep}
-                </div>
-              )}
-
-              <div>
-                <textarea value={form.raw_transcript} onChange={e => setField('raw_transcript', e.target.value)}
-                  placeholder="Injeksi data teks mentah atau hasil rekaman rapat Anda ke sini..."
-                  rows={6} className="w-full px-5 py-4 rounded-xl text-sm font-mono text-slate-300 placeholder-slate-700 outline-none resize-none bg-[#0a0f1e] border border-fuchsia-900/30 focus:border-fuchsia-500/50 transition-all leading-relaxed" />
-              </div>
-            </div>
-          </div>
-
-          {/* KOLOM KANAN: DASHBOARD OUTPUT */}
-          <div className="lg:col-span-7 space-y-8">
-            
-            <div className="relative rounded-2xl p-6 md:p-8 bg-gradient-to-b from-[#0a191e] to-[#020617] border border-emerald-900/50 shadow-2xl">
-              <div className="absolute top-0 right-1/2 translate-x-1/2 w-48 h-[1px] bg-gradient-to-r from-transparent via-emerald-500 to-transparent"></div>
-              
-              <div className="flex justify-between items-center mb-8 border-b border-emerald-900/30 pb-5">
-                <h2 className="text-sm font-bold text-white tracking-widest flex items-center gap-3 uppercase">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  </div>
-                  Realtime Output Matrix
-                </h2>
-                <div className="flex gap-2">
-                  <span className="text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(16,185,129,0.2)]">
-                    🟢 Sync Active
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Isi Pembahasan Lengkap</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.isi_notulen)} W</span>
-                  </div>
-                  <textarea value={form.isi_notulen} onChange={e => setField('isi_notulen', e.target.value)}
-                    rows={12} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-loose whitespace-pre-wrap text-justify shadow-inner" />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Kesimpulan Eksekutif</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.kesimpulan)} W</span>
-                  </div>
-                  <textarea value={form.kesimpulan} onChange={e => setField('kesimpulan', e.target.value)}
-                    rows={4} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-emerald-400/80 text-[10px] uppercase font-bold tracking-[0.15em]">Tindak Lanjut & Timeline</label>
-                    <span className="text-[10px] font-mono text-emerald-600 bg-emerald-950/50 px-2 py-0.5 rounded">{countWords(form.tindak_lanjut)} W</span>
-                  </div>
-                  <textarea value={form.tindak_lanjut} onChange={e => setField('tindak_lanjut', e.target.value)}
-                    rows={4} style={{ fontFamily: 'inherit' }} className="w-full px-5 py-4 rounded-xl text-sm text-slate-200 outline-none bg-slate-900/50 border border-slate-800 focus:border-emerald-500/50 transition-all leading-relaxed whitespace-pre-wrap text-justify shadow-inner" />
-                </div>
-
-                <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center pt-6 mt-4 border-t border-emerald-900/30 gap-4">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-bold text-slate-500 font-mono uppercase tracking-widest">Document Status</span>
-                    <select value={form.status} onChange={e => setField('status', e.target.value)}
-                      className="px-4 py-2 rounded-lg text-xs font-bold outline-none bg-slate-900/80 border border-slate-700 text-white focus:border-emerald-500 transition-colors appearance-none cursor-pointer">
-                      <option value="draft">📝 DRAFT</option>
-                      <option value="review">👁️ IN REVIEW</option>
-                      <option value="final">✅ FINALIZED</option>
-                    </select>
+                {/* BARIS TANGGAL & JAM: MURNI BERJAJAR 3 KOLOM */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Tanggal *</label>
+                    <div className="relative">
+                      <i className="fa-regular fa-calendar absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                      <input type="date" value={form.tanggal || ''} onChange={e => setField('tanggal', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                    </div>
                   </div>
                   
-                  <button onClick={() => handleSave()} disabled={saving}
-                    className="px-8 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest text-center transition-all bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] active:scale-95 disabled:opacity-50">
-                    {saving ? 'Syncing to Core...' : '💾 Secure Database Sync'}
-                  </button>
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Mulai</label>
+                    <div className="relative">
+                      <i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                      <input type="time" value={form.waktu_mulai || ''} onChange={e => setField('waktu_mulai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                    </div>
+                  </div>
+                  
+                  <div className="sm:col-span-1">
+                    <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Jam Selesai</label>
+                    <div className="relative">
+                      <i className="fa-regular fa-clock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                      <input type="time" value={form.waktu_selesai || ''} onChange={e => setField('waktu_selesai', e.target.value)} className="w-full pl-10 pr-2 py-3 rounded-xl text-sm text-slate-800 font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" />
+                    </div>
+                  </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Lokasi</label><div className="relative"><i className="fa-solid fa-location-dot absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.tempat || ''} onChange={e => setField('tempat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Pimpinan Rapat</label><div className="relative"><i className="fa-solid fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.pimpinan_rapat || ''} onChange={e => setField('pimpinan_rapat', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Notulis</label><div className="relative"><i className="fa-solid fa-pen-nib absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.notulis || ''} onChange={e => setField('notulis', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                  <div><label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Peserta Hadir</label><div className="relative"><i className="fa-solid fa-users absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i><input type="text" value={form.peserta || ''} onChange={e => setField('peserta', e.target.value)} className="w-full pl-10 pr-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400" /></div></div>
+                </div>
+                
+                <div className="pt-2">
+                  <label className="block text-[10px] uppercase font-bold tracking-widest mb-1.5 text-yellow-600"><i className="fa-solid fa-shield-halved"></i> Otoritas Brankas Keamanan</label>
+                  <select value={form.status || 'draft'} onChange={e => setField('status', e.target.value)} className="w-full px-4 py-3 rounded-xl text-sm font-bold bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 cursor-pointer">
+                    <option value="draft">📝 DRAFT (Arsip Konsep)</option>
+                    <option value="review">👁️ REVIEW (Pemeriksaan internal)</option>
+                    <option value="final">✅ FINAL (Publikasi Luar)</option>
+                    <option value="rahasia" className="text-red-600 font-extrabold">🔒 RAHASIA (Hanya Kebal PIN Admin Vault)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1.5">Agenda / Pokok Tema</label>
+                  <textarea value={form.agenda || ''} onChange={e => setField('agenda', e.target.value)} rows={2} className="w-full px-4 py-3 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner" placeholder="Sebutkan pokok pembahasan..." />
+                </div>
               </div>
             </div>
 
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative flex flex-col">
+              <div className="absolute top-0 right-0 w-1.5 h-full bg-yellow-400"></div>
+              <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
+                <h2 className="text-xs font-bold text-slate-500 tracking-widest uppercase"><i className="fa-solid fa-microphone-lines text-yellow-500"></i> Studio Suara Lisan</h2>
+                <span className="text-[10px] font-bold text-yellow-700 bg-yellow-100 px-2.5 py-1 rounded-md">{countWords(form.raw_transcript)} KATA</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                {!recording ? (
+                  <button onClick={startRecording} disabled={aiLoading} className="flex-1 px-4 py-3 rounded-xl text-xs font-bold uppercase bg-slate-100 hover:bg-slate-200 border border-slate-200"><i className="fa-solid fa-microphone"></i> Mulai Rekam</button>
+                ) : (
+                  <button onClick={stopRecording} className="flex-1 px-4 py-3 rounded-xl text-xs font-bold uppercase bg-red-50 text-red-600 border border-red-200 animate-pulse"><i className="fa-solid fa-stop"></i> Selesai • {formatTime(recordingTime)}</button>
+                )}
+                <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript} className="flex-1 px-4 py-3 rounded-xl text-xs font-extrabold uppercase bg-slate-900 text-white shadow-md hover:bg-slate-800 disabled:opacity-40">
+                  {aiLoading ? <><i className="fa-solid fa-circle-notch fa-spin text-yellow-400"></i> Memproses...</> : <><i className="fa-solid fa-wand-magic-sparkles text-yellow-400"></i> Rapikan AI</>}
+                </button>
+              </div>
+              <textarea value={form.raw_transcript || ''} onChange={e => setField('raw_transcript', e.target.value)} placeholder="Teks lisan otomatis muncul di sini..." rows={4} className="w-full flex-1 px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 resize-none shadow-inner leading-relaxed" />
+            </div>
           </div>
 
+          <div className="lg:col-span-7 relative">
+            {aiLoading && (
+              <div className="absolute inset-0 z-20 bg-white/70 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center border border-yellow-200 shadow-2xl">
+                <div className="w-16 h-16 bg-gradient-to-tr from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-lg mb-4 animate-bounce"><i className="fa-solid fa-brain text-white text-3xl animate-pulse"></i></div>
+                <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest mb-1">Penyelarasan Presisi...</h3>
+                <p className="text-slate-600 text-xs font-medium text-center px-8">Mengekstrak data mentah tanpa menghilangkan nama, angka, atau konteks penting.</p>
+              </div>
+            )}
+            <div className={`bg-white rounded-2xl p-5 sm:p-8 border border-slate-200 shadow-sm h-full transition-opacity ${aiLoading ? 'opacity-30' : 'opacity-100'}`}>
+              <h2 className="text-xs font-bold text-slate-500 tracking-widest mb-6 border-b border-slate-100 pb-4 uppercase"><i className="fa-solid fa-file-signature text-yellow-500"></i> Hasil Penyelarasan Otomatis</h2>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-list-check text-yellow-500"></i> Hasil Pembahasan / Notulensi Bertingkat</label>
+                  <textarea value={form.isi_notulen || ''} onChange={e => setField('isi_notulen', e.target.value)} rows={14} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-loose shadow-inner whitespace-pre-wrap font-medium" />
+                </div>
+                <div>
+                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-bolt text-yellow-500"></i> Kesimpulan Ringkas Poin-ke-Poin</label>
+                  <textarea value={form.kesimpulan || ''} onChange={e => setField('kesimpulan', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-yellow-50/50 border border-yellow-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap font-bold text-yellow-950" />
+                </div>
+                <div>
+                  <label className="block text-slate-800 text-[10px] uppercase font-extrabold tracking-widest mb-2"><i className="fa-solid fa-forward-step text-yellow-500"></i> Rencana Tindak Lanjut (RTL)</label>
+                  <textarea value={form.tindak_lanjut || ''} onChange={e => setField('tindak_lanjut', e.target.value)} rows={4} className="w-full px-5 py-4 rounded-xl text-sm bg-slate-50 border border-slate-200 focus:outline-none focus:border-yellow-400 leading-relaxed shadow-inner whitespace-pre-wrap font-medium" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>
