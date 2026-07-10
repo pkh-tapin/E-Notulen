@@ -2,11 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-
-// =========================================================================
-// IMPORT FIREBASE REALTIME DATABASE 
-// Menggunakan node 'notes' agar sinkron dengan database asli Anda
-// =========================================================================
 import { ref, push, set, get, child, update } from 'firebase/database';
 import { db } from '../lib/firebase'; 
 
@@ -53,14 +48,14 @@ export default function TambahNotulen() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   // =========================================================================
-  // SISTEM ANTI REFRESH / ANTI KELUAR HALAMAN
+  // SISTEM SAFE LOCK: ANTI REFRESH & ANTI KELUAR HALAMAN OTOMATIS
   // =========================================================================
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Jika form sedang terisi sebagian, munculkan peringatan saat mau refresh
+      // Jika form ada isinya, cegah refresh / tutup tab browser
       if (form.judul || form.isi_notulen || form.raw_transcript) {
         e.preventDefault();
-        e.returnValue = '';
+        e.returnValue = 'Data belum disimpan. Yakin ingin keluar?';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -101,7 +96,7 @@ export default function TambahNotulen() {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 4500); 
+    setTimeout(() => setToast(''), 5500); // Waktu toast diperpanjang agar pesan error terbaca
   };
 
   const setField = (key: keyof FormData, val: string) => {
@@ -172,7 +167,7 @@ export default function TambahNotulen() {
       setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + resData.transcript);
       await processTranscript(resData.transcript);
     } catch (err: any) {
-      showToast(`❌ ${err.message || 'Kesalahan Server'}`);
+      showToast(`❌ Transkripsi Error: ${err.message}`);
       setAiLoading(false);
       setAiStep('');
     }
@@ -204,10 +199,9 @@ export default function TambahNotulen() {
       const resData = await res.json();
 
       if (!res.ok) {
-        throw new Error(resData.error || "Gagal terhubung ke AI server.");
+        throw new Error(resData.error || "Terjadi kesalahan server saat proses AI.");
       }
 
-      // Menangkap apabila format API mengembalikan {success: true, data: {...}} 
       const finalData = resData.data || resData;
 
       const formatText = (val: any): string => {
@@ -281,9 +275,10 @@ export default function TambahNotulen() {
       }
 
       showToast('✅ Tersimpan! Sinkronisasi Database Berhasil.');
-      console.log("SUKSES SINKRON FIREBASE. ID:", targetId);
+      console.log("SUKSES SINKRON FIREBASE NODE NOTES. ID:", targetId);
       
-      // Hapus pencegahan leave page setelah data aman tersimpan
+      // Menonaktifkan anti-refresh agar pengguna bisa kembali ke home tanpa ditahan
+      window.onbeforeunload = null; 
       setTimeout(() => router.push(`/`), 1500);
       
     } catch (err: any) {
@@ -332,7 +327,7 @@ export default function TambahNotulen() {
               </div>
             </div>
             <div className="flex gap-3 items-center">
-              {/* PERBAIKAN: type="button" untuk anti reload bawaan HTML */}
+              {/* TOMBOL DIAMANKAN: type="button" agar browser tidak refresh */}
               <button type="button" onClick={() => handleSave('draft')} disabled={saving}
                 className="hidden sm:block px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300">
                 Simpan Draft
@@ -433,6 +428,7 @@ export default function TambahNotulen() {
               </div>
               
               <div className="flex flex-col sm:flex-row gap-3 mb-5 relative z-10">
+                {/* TOMBOL DIAMANKAN: type="button" */}
                 {!recording ? (
                   <button type="button" onClick={startRecording} disabled={aiLoading}
                     className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-white border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-400 disabled:opacity-50">
@@ -445,6 +441,7 @@ export default function TambahNotulen() {
                   </button>
                 )}
 
+                {/* TOMBOL DIAMANKAN: type="button" */}
                 <button type="button" onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript.trim()}
                   className="flex-1 flex justify-center items-center gap-2 px-4 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl active:scale-95">
                   {aiLoading ? (
@@ -528,6 +525,7 @@ export default function TambahNotulen() {
                     </select>
                   </div>
                   
+                  {/* TOMBOL DIAMANKAN: type="button" */}
                   <button type="button" onClick={() => handleSave()} disabled={saving}
                     className="px-8 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest text-center transition-all bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md shadow-yellow-400/30 active:scale-95 disabled:opacity-50">
                     {saving ? 'Syncing...' : '💾 Simpan & Sinkron'}
