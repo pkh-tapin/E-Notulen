@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
-import { ref, onValue, remove } from 'firebase/database';
+import { ref, onValue, remove, update } from 'firebase/database';
 import { db } from '../lib/firebase';
 
 interface AIStructured {
@@ -27,13 +27,15 @@ interface Notulen {
   status: string;
   audio_url?: string;
   ai_structured?: AIStructured;
+  isLocked?: boolean; // Field Status Kunci Dokumen
 }
 
 export default function DashboardPremium() {
   const [data, setData] = useState<Notulen[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [isAdmin, setIsAdmin] = useState(false);
+  // ROLE SYSTEM: 'public' | 'admin' | 'superadmin'
+  const [userRole, setUserRole] = useState<'public' | 'admin' | 'superadmin'>('public');
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -47,23 +49,22 @@ export default function DashboardPremium() {
   const itemsPerPage = 6; 
 
   const [printingId, setPrintingId] = useState<string | null>(null);
-  
-  // STATE BARU: Untuk menampilkan Pop-Up "Lihat Detail"
   const [viewItem, setViewItem] = useState<Notulen | null>(null);
 
+  // Backward compatibility helper
+  const isAdmin = userRole === 'admin' || userRole === 'superadmin';
+  const isSuperAdmin = userRole === 'superadmin';
+
   // =========================================================================
-  // BACA DATA DARI NODE 'notes'
+  // SYNC REALTIME DATABASE
   // =========================================================================
   useEffect(() => {
     setLoading(true);
     const notesRef = ref(db, 'notes');
     
-    console.log("📡 Terhubung ke Firebase Node 'notes'...");
-    
     const unsubscribe = onValue(notesRef, (snapshot) => {
       if (snapshot.exists()) {
         const dataObj = snapshot.val();
-        
         const formattedData = Object.keys(dataObj).map(key => ({
           id: key,
           ...dataObj[key]
@@ -79,7 +80,7 @@ export default function DashboardPremium() {
       }
       setLoading(false);
     }, (error) => {
-      console.error("Gagal sinkronisasi dari Firebase:", error);
+      console.error("Gagal sinkronisasi data:", error);
       setLoading(false);
     });
 
@@ -102,8 +103,8 @@ export default function DashboardPremium() {
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleAdminToggle = () => {
-    if (isAdmin) {
-      setIsAdmin(false); 
+    if (userRole !== 'public') {
+      setUserRole('public'); 
       if (statusFilter === 'rahasia') setStatusFilter('all');
     } else {
       setShowPinModal(true);
@@ -115,16 +116,31 @@ export default function DashboardPremium() {
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (pinInput === '1234') { 
-      setIsAdmin(true);
+      setUserRole('admin');
+      setShowPinModal(false);
+    } else if (pinInput === '9999') {
+      setUserRole('superadmin');
       setShowPinModal(false);
     } else {
-      setPinError('Akses Ditolak: PIN Invalid!');
+      setPinError('PIN Tidak Valid!');
       setPinInput('');
     }
   };
 
+  // TOGGLE LOCK STATUS DI FIREBASE
+  const handleToggleLock = async (item: Notulen) => {
+    if (!isAdmin) return;
+    const currentLockStatus = item.isLocked !== false; // Default true jika undefined
+    try {
+      const targetRef = ref(db, `notes/${item.id}`);
+      await update(targetRef, { isLocked: !currentLockStatus });
+    } catch (err) {
+      console.error("Gagal merubah status kunci dokumen:", err);
+    }
+  };
+
   const confirmDelete = async () => {
-    if (!deleteId) return;
+    if (!deleteId || !isSuperAdmin) return;
     setIsDeleting(true);
     try {
       const targetRef = ref(db, `notes/${deleteId}`);
@@ -138,7 +154,7 @@ export default function DashboardPremium() {
   };
 
   // =========================================================================
-  // ENGINE PDF RESMI (Diperbaiki agar Rapi & Tidak Hancur)
+  // REKAYASA TOTAL ENGINE CETAK PDF RESMI (ANTI-HANCUR)
   // =========================================================================
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
@@ -147,79 +163,117 @@ export default function DashboardPremium() {
     printContainer.style.left = '-9999px';
     printContainer.style.top = '-9999px';
 
-    // Formatter khusus agar spasi & enter terbaca sempurna oleh html2pdf
     const formatHtmlPDF = (textData?: string | string[] | null) => {
       if (!textData) return '-';
       const text = Array.isArray(textData) ? textData.join('\n') : String(textData);
       
       return text.split('\n').map(line => {
         const cleanLine = line.trim().replace(/\*/g, '');
-        if (!cleanLine) return '<div style="height: 10px;"></div>';
+        if (!cleanLine) return '<div style="height: 12px;"></div>';
         
-        // Deteksi jika baris adalah list/penomoran
         const isList = /^[0-9]+\.|^-|^[a-zA-Z]\./.test(cleanLine);
-        const padding = isList ? 'padding-left: 20px;' : 'padding-left: 0px;';
+        const padding = isList ? 'padding-left: 25px;' : 'padding-left: 0px;';
         
-        return `<div style="margin-bottom: 6px; text-align: justify; line-height: 1.5; ${padding}">${cleanLine}</div>`;
+        return `<p style="margin: 0 0 8px 0; text-align: justify; text-justify: inter-word; line-height: 1.6; ${padding}">${cleanLine}</p>`;
       }).join('');
     };
     
-    // Desain PDF Resmi: Menggunakan Times New Roman 12pt
     printContainer.innerHTML = `
-      <div id="print-capture-area" style="padding: 20mm; font-family: 'Times New Roman', Times, serif; color: #000; background: #fff; width: 210mm; box-sizing: border-box; line-height: 1.5;">
+      <div id="print-capture-area" style="padding: 25mm 20mm 20mm 25mm; font-family: 'Times New Roman', Times, serif; color: #000; background: #fff; width: 210mm; box-sizing: border-box; font-size: 12pt;">
         
-        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px;">
-          <h1 style="margin: 0; font-size: 14pt; font-weight: bold; text-transform: uppercase;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
-          <h2 style="margin: 5px 0 0 0; font-size: 14pt; font-weight: bold; text-transform: uppercase;">SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
-          <h3 style="margin: 5px 0 0 0; font-size: 13pt; font-weight: bold; text-transform: uppercase;">KABUPATEN TAPIN</h3>
+        <div style="text-align: center; border-bottom: 4px double #000; padding-bottom: 12px; margin-bottom: 30px;">
+          <h1 style="margin: 0 0 4px 0; font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">LAPORAN HASIL KEGIATAN & NOTULENSI RAPAT</h1>
+          <h2 style="margin: 0 0 4px 0; font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">SUMBER DAYA MANUSIA PROGRAM KELUARGA HARAPAN</h2>
+          <h3 style="margin: 0; font-size: 13pt; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">KABUPATEN TAPIN</h3>
         </div>
 
-        <div style="margin-bottom: 20px; page-break-inside: avoid; font-size: 12pt;">
-          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">I. IDENTITAS KEGIATAN</h4>
-          <table style="width: 100%; border-collapse: collapse; font-size: 12pt; line-height: 1.5;">
-            <tr><td style="width: 25%; vertical-align: top;">Judul Kegiatan</td><td style="width: 3%; vertical-align: top;">:</td><td style="vertical-align: top; font-weight: bold;">${item.judul || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Tanggal</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.tanggal || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Waktu</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td></tr>
-            <tr><td style="vertical-align: top;">Tempat</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.tempat || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Pimpinan Rapat</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.pimpinan_rapat || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Notulis</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.notulis || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Agenda Utama</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.agenda || '-'}</td></tr>
-            <tr><td style="vertical-align: top;">Peserta Hadir</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.peserta ? item.peserta.replace(/\n/g, ', ') : '-'}</td></tr>
+        <div style="margin-bottom: 25px; page-break-inside: avoid;">
+          <h4 style="margin: 0 0 12px 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">I. DOKUMEN IDENTITAS KEGIATAN</h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12pt; table-layout: fixed;">
+            <tr>
+              <td style="width: 28%; py: 4px; vertical-align: top;">Nama Kegiatan</td>
+              <td style="width: 3%; py: 4px; vertical-align: top; text-align: center;">:</td>
+              <td style="width: 69%; py: 4px; vertical-align: top; font-weight: bold; text-align: justify;">${item.judul || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Hari / Tanggal</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px;">${item.tanggal || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Waktu Pelaksanaan</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'} WITA</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Tempat / Lokasi</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px; text-align: justify;">${item.tempat || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Pimpinan Rapat</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px;">${item.pimpinan_rapat || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Notulis</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px;">${item.notulis || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Agenda Pembahasan</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px; text-align: justify;">${item.agenda || '-'}</td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; padding-top: 5px;">Daftar Hadir Peserta</td>
+              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding-top: 5px; text-align: justify; word-wrap: break-word;">${item.peserta ? item.peserta.replace(/\n/g, ', ') : '-'}</td>
+            </tr>
           </table>
         </div>
 
-        <div style="margin-bottom: 20px; font-size: 12pt;">
-          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">II. HASIL PEMBAHASAN</h4>
-          ${formatHtmlPDF(item.isi_notulen)}
-        </div>
-
-        <div style="margin-bottom: 20px; page-break-inside: avoid; font-size: 12pt;">
-          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">III. KESIMPULAN</h4>
-          ${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}
-        </div>
-
-        <div style="margin-bottom: 40px; page-break-inside: avoid; font-size: 12pt;">
-          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">IV. RENCANA TINDAK LANJUT</h4>
-          ${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}
-        </div>
-
-        <div style="width: 100%; display: flex; justify-content: flex-end; page-break-inside: avoid;">
-          <div style="width: 300px; text-align: center; font-size: 12pt; line-height: 1.5; float: right;">
-            <p style="margin: 0 0 80px 0;">Tapin, ${item.tanggal || '...........................'}</p>
-            <p style="margin: 0; font-weight: bold; text-decoration: underline;">${item.pimpinan_rapat || '...................................................'}</p>
-            <p style="margin: 0;">Pimpinan Rapat</p>
+        <div style="margin-bottom: 25px;">
+          <h4 style="margin: 0 0 12px 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">II. JALANNYA RAPAT DAN PEMBAHASAN</h4>
+          <div style="text-align: justify; text-justify: inter-word;">
+            ${formatHtmlPDF(item.isi_notulen)}
           </div>
-          <div style="clear: both;"></div>
         </div>
+
+        <div style="margin-bottom: 25px; page-break-inside: avoid;">
+          <h4 style="margin: 0 0 12px 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">III. KESIMPULAN AKHIR</h4>
+          <div style="text-align: justify; text-justify: inter-word;">
+            ${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 45px; page-break-inside: avoid;">
+          <h4 style="margin: 0 0 12px 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">IV. RENCANA TINDAK LANJUT (RTL)</h4>
+          <div style="text-align: justify; text-justify: inter-word;">
+            ${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}
+          </div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; page-break-inside: avoid; table-layout: fixed;">
+          <tr>
+            <td style="width: 50%;"></td>
+            <td style="width: 50%; text-align: center; line-height: 1.5;">
+              <p style="margin: 0 0 75px 0;">Tapin, ${item.tanggal || '...........................'}</p>
+              <p style="margin: 0; font-weight: bold; text-decoration: underline; text-transform: uppercase;">${item.pimpinan_rapat || '...................................................'}</p>
+              <p style="margin: 4px 0 0 0; font-size: 11pt; color: #333;">Pimpinan Rapat / Penanggung Jawab</p>
+            </td>
+          </tr>
+        </table>
+
       </div>
     `;
     document.body.appendChild(printContainer);
 
     const opt = {
-      margin: [10, 10, 15, 10], 
-      filename: `NOTULEN_${item.tanggal}_${item.judul.substring(0, 15)}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      margin: [0, 0, 0, 0], 
+      filename: `OFFICIAL_NOTULEN_${item.tanggal}_${item.judul.substring(0, 20)}.pdf`,
+      image: { type: 'jpeg', quality: 1.0 },
+      html2canvas: { scale: 2.5, useCORS: true, letterRendering: true, logging: false },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
@@ -229,7 +283,7 @@ export default function DashboardPremium() {
         const worker = (window as any).html2pdf().set(opt).from(document.getElementById('print-capture-area'));
         await worker.save();
       } catch (err) {
-        console.error("PDF Error:", err);
+        console.error("PDF Engine Crash:", err);
       } finally {
         setPrintingId(null);
         document.body.removeChild(printContainer);
@@ -259,20 +313,19 @@ export default function DashboardPremium() {
       <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-800 pb-12 selection:bg-yellow-200 relative">
         
         {/* ========================================================= */}
-        {/* MODAL 'LIHAT DETAIL' - UI GLOSSY & PROFESIONAL */}
+        {/* POP-UP DETAIL MODAL (PREVIEW) */}
         {/* ========================================================= */}
         {viewItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
             <div className="bg-white rounded-3xl w-full max-w-3xl relative overflow-hidden shadow-2xl my-auto flex flex-col max-h-[90vh]">
               
-              {/* Header Modal */}
               <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   </div>
                   <div>
-                    <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Detail Notulen</h2>
+                    <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Detail Notulen Resmi</h2>
                     <p className="text-xs text-slate-500">{viewItem.tanggal} • {viewItem.waktu_mulai || '-'} WITA</p>
                   </div>
                 </div>
@@ -281,11 +334,9 @@ export default function DashboardPremium() {
                 </button>
               </div>
 
-              {/* Body Modal (Scrollable) */}
               <div className="p-6 overflow-y-auto custom-scrollbar">
                 <h1 className="text-xl sm:text-2xl font-black text-slate-800 mb-6 leading-snug">{viewItem.judul}</h1>
                 
-                {/* Grid Identitas */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
                   <div>
                     <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Pimpinan Rapat</span>
@@ -301,7 +352,6 @@ export default function DashboardPremium() {
                   </div>
                 </div>
 
-                {/* Konten Utama */}
                 <div className="space-y-8">
                   <div>
                     <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
@@ -332,7 +382,6 @@ export default function DashboardPremium() {
                 </div>
               </div>
               
-              {/* Footer Modal */}
               <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0">
                 <button onClick={() => setViewItem(null)} className="px-6 py-2.5 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 transition-colors">Tutup</button>
                 <button 
@@ -340,23 +389,25 @@ export default function DashboardPremium() {
                   className="px-6 py-2.5 rounded-xl bg-yellow-400 text-yellow-950 text-xs font-bold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                  Cetak PDF Resmi
+                  Cetak Dokumen Resmi
                 </button>
               </div>
             </div>
           </div>
         )}
         
-        {/* Modal Admin Auth */}
+        {/* MULTI-ROLE SECURITY MODAL AUTH */}
         {showPinModal && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-7 w-full max-w-sm relative overflow-hidden shadow-2xl border border-slate-100">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
               <div className="flex justify-between items-center mb-6">
-                <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                  <svg className="w-5 h-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z" /></svg>
-                  Otorisasi Admin
-                </h3>
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    Otorisasi Penjaga
+                  </h3>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Admin (1234) | Super Admin (9999)</p>
+                </div>
                 <button onClick={() => setShowPinModal(false)} className="text-slate-400 hover:text-red-500 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -371,27 +422,26 @@ export default function DashboardPremium() {
                   placeholder="••••"
                 />
                 {pinError && <p className="text-red-500 text-xs mb-4 text-center font-bold">{pinError}</p>}
-                <button type="submit" className="w-full py-3.5 bg-yellow-400 text-yellow-950 rounded-xl hover:bg-yellow-50 transition-all font-extrabold text-xs tracking-widest shadow-lg shadow-yellow-400/30">
-                  BUKA BRANKAS
+                <button type="submit" className="w-full py-3.5 bg-yellow-400 text-yellow-950 rounded-xl hover:bg-yellow-500 transition-all font-extrabold text-xs tracking-widest shadow-lg shadow-yellow-400/30">
+                  VERIFIKASI PIN
                 </button>
               </form>
             </div>
           </div>
         )}
 
-        {/* Modal Delete */}
+        {/* DELETE MODAL (SUPER ADMIN ONLY) */}
         {deleteId && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm border border-red-100 shadow-2xl">
               <h3 className="text-base font-extrabold text-red-600 mb-2 uppercase tracking-wide flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                Hapus Permanen?
+                Hapus Permanen Core Data?
               </h3>
-              <p className="text-slate-500 text-sm leading-relaxed mb-6">Tindakan ini akan menghapus data arsip dari server secara permanen.</p>
+              <p className="text-slate-500 text-sm leading-relaxed mb-6">Otorisasi Super Admin Terbaca. Tindakan ini tidak dapat dibatalkan.</p>
               <div className="flex gap-3">
                 <button onClick={() => setDeleteId(null)} disabled={isDeleting} className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl hover:bg-slate-200 transition-colors text-xs font-bold uppercase tracking-wide">Batal</button>
                 <button onClick={confirmDelete} disabled={isDeleting} className="flex-1 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all text-xs font-bold uppercase tracking-wide shadow-lg shadow-red-500/30">
-                  {isDeleting ? 'Memproses...' : 'Ya, Hapus'}
+                  {isDeleting ? 'Menghapus...' : 'Ya, Bersihkan'}
                 </button>
               </div>
             </div>
@@ -415,14 +465,14 @@ export default function DashboardPremium() {
               </Link>
               <button 
                 onClick={handleAdminToggle} 
-                className={`p-2.5 rounded-xl transition-all border ${isAdmin ? 'bg-yellow-50 border-yellow-400 text-yellow-600 shadow-md shadow-yellow-400/20' : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-yellow-500 hover:bg-slate-100'}`}
-                title={isAdmin ? "Mode Admin Aktif" : "Login Admin"}
+                className={`px-3 py-2.5 rounded-xl transition-all border flex items-center gap-2 text-xs font-bold uppercase tracking-wider ${
+                  userRole === 'superadmin' ? 'bg-red-50 border-red-300 text-red-600 shadow-md shadow-red-400/10' :
+                  userRole === 'admin' ? 'bg-yellow-50 border-yellow-400 text-yellow-600 shadow-md shadow-yellow-400/20' : 
+                  'bg-slate-50 border-slate-200 text-slate-400 hover:text-yellow-500 hover:bg-slate-100'
+                }`}
               >
-                {isAdmin ? (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z" /></svg>
-                )}
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z" /></svg>
+                <span>{userRole === 'public' ? 'Login' : userRole}</span>
               </button>
             </div>
           </div>
@@ -430,39 +480,27 @@ export default function DashboardPremium() {
 
         <div className="w-full max-w-7xl mx-auto px-4 md:px-6 mt-8">
           
-          {/* STATISTIK GRID */}
+          {/* STATISTIK ARSIP */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-slate-50 rounded-bl-full -mr-8 -mt-8"></div>
-              <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1 relative z-10 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>
-                Total Arsip
-              </p>
-              <h2 className="text-3xl font-black text-slate-800 font-mono relative z-10">{hitungTotal}</h2>
+              <p className="text-slate-500 text-[10px] uppercase font-bold tracking-widest mb-1 flex items-center gap-1.5">Total Arsip</p>
+              <h2 className="text-2xl sm:text-3xl font-black text-slate-800 font-mono">{hitungTotal}</h2>
             </div>
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-50 rounded-bl-full -mr-8 -mt-8"></div>
-              <p className="text-emerald-600 text-[10px] uppercase font-bold tracking-widest mb-1 relative z-10 flex items-center gap-1.5">
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                Finalized
-              </p>
-              <h2 className="text-3xl font-black text-emerald-600 font-mono relative z-10">{hitungFinal}</h2>
+              <p className="text-emerald-600 text-[10px] uppercase font-bold tracking-widest mb-1 flex items-center gap-1.5">Finalized</p>
+              <h2 className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono">{hitungFinal}</h2>
             </div>
-            <div className={`bg-white rounded-2xl p-5 border ${isAdmin ? 'border-yellow-300 bg-yellow-50/30' : 'border-slate-200'} shadow-sm relative overflow-hidden flex flex-col justify-center`}>
-              <div className={`absolute top-0 right-0 w-16 h-16 ${isAdmin ? 'bg-yellow-100' : 'bg-orange-50'} rounded-bl-full -mr-8 -mt-8`}></div>
-              <p className={`${isAdmin ? 'text-yellow-600' : 'text-orange-500'} text-[10px] uppercase font-bold tracking-widest mb-1 relative z-10 flex items-center gap-1.5`}>
-                {isAdmin ? (
-                  <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8V7z" /></svg>Vault Rahasia</>
-                ) : (
-                  <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>Drafting</>
-                )}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
+              <p className="text-orange-500 text-[10px] uppercase font-bold tracking-widest mb-1 flex items-center gap-1.5">
+                {isAdmin ? '🔒 Vault Rahasia' : '📝 Drafting'}
               </p>
-              <h2 className={`text-3xl font-black ${isAdmin ? 'text-yellow-600' : 'text-orange-500'} font-mono relative z-10`}>
+              <h2 className="text-2xl sm:text-3xl font-black text-orange-500 font-mono">
                 {isAdmin ? hitungRahasia : hitungDraft}
               </h2>
             </div>
           </div>
 
+          {/* SEARCH & FILTER */}
           <div className="flex flex-col sm:flex-row gap-3 mb-8 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-sm">
             <div className="flex-1 relative flex items-center">
               <svg className="w-5 h-5 text-slate-400 absolute left-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -489,106 +527,142 @@ export default function DashboardPremium() {
             </div>
           </div>
 
+          {/* LIST DATA CARDS */}
           {loading ? (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
              {[1, 2, 3].map(n => (
-               <div key={n} className="bg-white rounded-2xl p-6 h-56 animate-pulse border border-slate-100 shadow-sm">
-                 <div className="h-4 bg-slate-200 rounded w-1/3 mb-4"></div>
-                 <div className="h-6 bg-slate-200 rounded w-3/4 mb-4"></div>
-                 <div className="h-20 bg-slate-100 rounded w-full"></div>
-               </div>
+               <div key={n} className="bg-white rounded-2xl p-6 h-56 animate-pulse border border-slate-100 shadow-sm" />
              ))}
            </div>
           ) : paginatedData.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-2xl border border-dashed border-slate-300 shadow-sm">
-              <svg className="w-12 h-12 text-slate-300 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
               <p className="text-slate-500 text-sm font-bold uppercase tracking-widest">0 Data Terdeteksi</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {paginatedData.map((item) => (
-                <div key={item.id} className={`bg-white rounded-2xl p-6 border ${item.status === 'rahasia' ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : 'border-slate-200 shadow-sm'} hover:shadow-xl hover:-translate-y-1 hover:border-yellow-400 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden`}>
-                  
-                  <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.status === 'rahasia' ? 'bg-yellow-400' : 'bg-slate-200 group-hover:bg-yellow-400'} transition-colors`}></div>
-                  
-                  <div>
-                    <div className="flex justify-between items-center mb-4 mt-1">
-                      <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
-                        <svg className="w-3.5 h-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                        {item.tanggal}
-                      </span>
-                      <span className={`text-[9px] font-black tracking-wider px-2.5 py-1 rounded-md uppercase border ${
-                        item.status === 'final' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
-                        item.status === 'rahasia' ? 'bg-yellow-100 text-yellow-700 border-yellow-400 shadow-sm' :
-                        'bg-slate-100 text-slate-600 border-slate-200'
-                      }`}>
-                        {item.status === 'rahasia' ? '🔒 RAHASIA' : item.status}
-                      </span>
-                    </div>
-                    
-                    <h3 className="text-base font-extrabold text-slate-800 mb-3 leading-snug group-hover:text-yellow-600 transition-colors line-clamp-2">
-                      {item.judul}
-                    </h3>
-                    
-                    {item.agenda && (
-                      <div className="mb-4 flex items-start gap-2 text-xs text-slate-600 line-clamp-2">
-                        <svg className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-                        <span className="leading-relaxed">{item.agenda}</span>
-                      </div>
-                    )}
+              {paginatedData.map((item) => {
+                const isLockedDoc = item.isLocked !== false; // Default true jika undefined/belum diset
+                // BISA EDIT JIKA: Dokumen Terbuka (isLockedDoc == false) ATAU User adalah Admin/SuperAdmin
+                const canUserEdit = !isLockedDoc || isAdmin;
 
-                    <div className="mb-4 p-3.5 rounded-xl bg-yellow-50/50 border border-yellow-100 text-xs text-slate-700 line-clamp-3 relative">
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <svg className="w-3.5 h-3.5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                        <span className="text-[10px] text-yellow-600 font-extrabold uppercase tracking-widest">Kesimpulan Singkat</span>
+                return (
+                  <div key={item.id} className={`bg-white rounded-2xl p-6 border ${item.status === 'rahasia' ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : 'border-slate-200 shadow-sm'} hover:shadow-xl hover:-translate-y-1 hover:border-yellow-400 transition-all duration-300 flex flex-col justify-between group relative overflow-hidden`}>
+                    
+                    <div className={`absolute top-0 left-0 right-0 h-1.5 ${item.status === 'rahasia' ? 'bg-yellow-400' : 'bg-slate-200 group-hover:bg-yellow-400'} transition-colors`}></div>
+                    
+                    <div>
+                      <div className="flex justify-between items-center mb-4 mt-1">
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-100">
+                          {item.tanggal}
+                        </span>
+                        
+                        {/* INDIKATOR STATUS KUNCI (ADMIN & SUPER ADMIN BISA KLIK UNTUK TOGGLE LOCK) */}
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleToggleLock(item)}
+                            disabled={!isAdmin}
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 border transition-all ${
+                              isLockedDoc 
+                                ? 'bg-red-50 text-red-600 border-red-200' 
+                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                            } ${isAdmin ? 'hover:scale-105 cursor-pointer' : 'cursor-not-allowed'}`}
+                            title={isAdmin ? "Klik untuk merubah kunci dokumen" : "Status Kunci Dokumen"}
+                          >
+                            {isLockedDoc ? '🔒 Terkunci' : '🔓 Terbuka'}
+                          </button>
+                          
+                          <span className={`text-[9px] font-black tracking-wider px-2.5 py-1 rounded-md uppercase border ${
+                            item.status === 'final' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 
+                            item.status === 'rahasia' ? 'bg-yellow-100 text-yellow-700 border-yellow-400' :
+                            'bg-slate-100 text-slate-600 border-slate-200'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </div>
                       </div>
-                      <span className="leading-relaxed font-medium">
-                        {item.kesimpulan || item.ai_structured?.ringkasan || 'Belum ada kesimpulan yang digenerate AI.'}
-                      </span>
+                      
+                      <h3 className="text-base font-extrabold text-slate-800 mb-3 leading-snug group-hover:text-yellow-600 transition-colors line-clamp-2">
+                        {item.judul}
+                      </h3>
+                      
+                      {item.agenda && (
+                        <div className="mb-4 flex items-start gap-2 text-xs text-slate-600 line-clamp-2">
+                          <span className="leading-relaxed">{item.agenda}</span>
+                        </div>
+                      )}
+
+                      <div className="mb-4 p-3.5 rounded-xl bg-yellow-50/50 border border-yellow-100 text-xs text-slate-700 line-clamp-3 relative">
+                        <span className="leading-relaxed font-medium">
+                          {item.kesimpulan || item.ai_structured?.ringkasan || 'Belum ada kesimpulan AI.'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 mt-2 border-t border-slate-100">
+                      {/* ACTION GRID: LIHAT, EDIT, PRINT */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <button 
+                          onClick={() => setViewItem(item)} 
+                          className="py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 transition-all"
+                        >
+                          Lihat
+                        </button>
+                        
+                        {canUserEdit ? (
+                          <Link 
+                            href={`/tambah?edit=${item.id}`}
+                            className="py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 transition-all block"
+                          >
+                            Edit
+                          </Link>
+                        ) : (
+                          <button 
+                            disabled
+                            className="py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-400 text-[11px] font-bold text-center cursor-not-allowed opacity-60"
+                            title="Dokumen Terkunci. Hanya Super Admin/Admin yang dapat mengedit atau membuka kunci."
+                          >
+                            🔒 Edit
+                          </button>
+                        )}
+
+                        <button 
+                          onClick={() => handleCetakPDF(item)}
+                          disabled={printingId === item.id}
+                          className="py-2.5 bg-yellow-400 text-yellow-950 rounded-xl text-[11px] font-extrabold hover:bg-yellow-500 transition-all disabled:opacity-50"
+                        >
+                          {printingId === item.id ? '...' : 'Print'}
+                        </button>
+                      </div>
+
+                      {/* AREA SUPER ADMIN ONLY: HAPUS */}
+                      {isSuperAdmin && (
+                        <div className="mt-2 pt-2 border-t border-dashed border-slate-200">
+                          <button 
+                            onClick={() => setDeleteId(item.id)} 
+                            className="w-full py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-bold uppercase tracking-wide hover:bg-red-100 transition-colors"
+                          >
+                            🗑️ Hapus Permanen (Super Admin)
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
-
-                  <div className="pt-4 mt-2 border-t border-slate-100">
-                    <div className="flex gap-2.5">
-                      {/* TOMBOL LIHAT DETAIL (MEMBUKA MODAL) */}
-                      <button 
-                        onClick={() => setViewItem(item)} 
-                        className="flex-1 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5"
-                      >
-                        Lihat Detail
-                      </button>
-                      <button 
-                        onClick={() => handleCetakPDF(item)}
-                        disabled={printingId === item.id}
-                        className="flex-1 py-2.5 bg-yellow-400 text-yellow-950 rounded-xl text-[11px] font-extrabold hover:bg-yellow-500 transition-all shadow-md shadow-yellow-400/20 disabled:opacity-50 flex items-center justify-center gap-1.5"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                        {printingId === item.id ? 'Memproses...' : 'Cetak PDF'}
-                      </button>
-                    </div>
-
-                    {isAdmin && (
-                      <div className="flex gap-2 mt-2.5 pt-2.5 border-t border-dashed border-slate-200 animate-fade-in">
-                        <Link href={`/tambah?edit=${item.id}`} className="flex-1 py-2 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold uppercase text-center hover:bg-slate-200 transition-colors tracking-wide">Edit Data</Link>
-                        <button onClick={() => setDeleteId(item.id)} className="flex-1 py-2 bg-red-50 text-red-600 rounded-lg text-[10px] font-bold uppercase hover:bg-red-100 transition-colors tracking-wide">Hapus Permanen</button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
+          {/* PAGINATION PANEL */}
           {totalPages > 1 && (
             <div className="flex justify-center items-center gap-2 pt-2 pb-8">
-              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 hover:bg-slate-50 hover:text-yellow-500 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+              <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors">
+                ‹
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 text-xs font-bold rounded-xl transition-all border ${currentPage === page ? 'bg-yellow-400 text-yellow-950 border-yellow-400 shadow-md shadow-yellow-400/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-yellow-400'}`}>{page}</button>
+                <button key={page} onClick={() => setCurrentPage(page)} className={`w-9 h-9 text-xs font-bold rounded-xl transition-all border ${currentPage === page ? 'bg-yellow-400 text-yellow-950 border-yellow-400 shadow-md shadow-yellow-400/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{page}</button>
               ))}
-              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => prev + 1)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 hover:bg-slate-50 hover:text-yellow-500 transition-colors">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+              <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => prev + 1)} className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-colors">
+                ›
               </button>
             </div>
           )}
@@ -596,22 +670,11 @@ export default function DashboardPremium() {
         </div>
       </div>
       
-      {/* Tambahkan style untuk custom scrollbar pada modal */}
       <style dangerouslySetInnerHTML={{__html: `
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: #f1f5f9; 
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #cbd5e1; 
-          border-radius: 10px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8; 
-        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       `}} />
     </>
   );
