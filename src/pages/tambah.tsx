@@ -2,11 +2,6 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-
-// =========================================================================
-// IMPORT FIREBASE REALTIME DATABASE 
-// Pastikan file firebase.ts ada di dalam folder src/lib/
-// =========================================================================
 import { ref, push, set, get, child, update } from 'firebase/database';
 import { db } from '../lib/firebase'; 
 
@@ -57,13 +52,11 @@ export default function TambahNotulen() {
     return val;
   };
 
-  // =========================================================================
-  // BACA DATA JIKA MODE EDIT
-  // =========================================================================
   useEffect(() => {
     if (editId) {
       const dbRef = ref(db);
-      get(child(dbRef, `notulen/${editId}`))
+      // PERBAIKAN: Membaca data edit dari 'notes'
+      get(child(dbRef, `notes/${editId}`))
         .then((snapshot) => {
           if (snapshot.exists()) {
             const d = snapshot.val();
@@ -96,9 +89,6 @@ export default function TambahNotulen() {
     setForm(prev => ({ ...prev, [key]: val }));
   };
 
-  // =========================================================================
-  // LOGIKA REKAMAN SUARA & AI (TIDAK DIUBAH)
-  // =========================================================================
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -148,7 +138,7 @@ export default function TambahNotulen() {
         reader.readAsDataURL(blob);
       });
 
-      const transcribeRes = await fetch('/api/ai?action=transcribe', {
+      const transcribeRes = await fetch('/api/analyze?action=transcribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ audioBase64: base64, mimeType: 'audio/webm' })
@@ -172,6 +162,7 @@ export default function TambahNotulen() {
     }
   };
 
+  // SISTEM AI YANG AMAN: Menangkap respons dari analyze.ts tanpa hancur
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt.trim()) {
@@ -183,7 +174,7 @@ export default function TambahNotulen() {
     setAiStep('🧠 Neural AI sedang menyusun notulen profesional...');
 
     try {
-      const res = await fetch('/api/ai?action=process', {
+      const res = await fetch('/api/analyze?action=process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -244,9 +235,6 @@ export default function TambahNotulen() {
     }
   };
 
-  // =========================================================================
-  // SIMPAN KE FIREBASE (SINKRONISASI UTAMA)
-  // =========================================================================
   const handleSave = async (statusOverride?: string) => {
     if (!form.judul || !form.tanggal) {
       showToast('⚠️ Judul dan Tanggal Wajib Diisi!');
@@ -278,12 +266,12 @@ export default function TambahNotulen() {
       let targetId = editId as string;
 
       if (isEdit && editId) {
-        // UPDATE DATA
-        const notulenRef = ref(db, `notulen/${editId}`);
+        // PERBAIKAN: Menyimpan hasil edit ke 'notes'
+        const notulenRef = ref(db, `notes/${editId}`);
         await update(notulenRef, payload);
       } else {
-        // SIMPAN BARU
-        const notulenListRef = ref(db, 'notulen');
+        // PERBAIKAN: Menyimpan data baru ke 'notes'
+        const notulenListRef = ref(db, 'notes');
         const newNotulenRef = push(notulenListRef);
         targetId = newNotulenRef.key as string;
         
@@ -294,9 +282,8 @@ export default function TambahNotulen() {
       }
 
       showToast('✅ Tersimpan! Sinkronisasi Database Berhasil.');
-      console.log("SUKSES SINKRON FIREBASE. ID:", targetId);
+      console.log("SUKSES SINKRON FIREBASE NODE NOTES. ID:", targetId);
       
-      // Kembali ke halaman dashboard (agar user langsung melihat datanya muncul)
       setTimeout(() => router.push(`/`), 1500);
       
     } catch (err: any) {
@@ -316,10 +303,8 @@ export default function TambahNotulen() {
         <title>{isEdit ? 'Edit Notulen' : 'Buat Baru'} - AI NOTE TAPIN</title>
       </Head>
 
-      {/* TEMA PUTIH KUNING */}
       <div className="min-h-screen bg-slate-50 overflow-x-hidden w-full text-slate-800 font-sans selection:bg-yellow-200">
         
-        {/* TOAST NOTIFICATION */}
         {toast && (
           <div className="fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl text-sm font-bold animate-bounce backdrop-blur-xl transition-all bg-white border border-yellow-400 shadow-xl">
             <div className="flex items-center gap-3 text-slate-800">
@@ -329,7 +314,6 @@ export default function TambahNotulen() {
           </div>
         )}
 
-        {/* NAVBAR KUNING PUTIH */}
         <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 w-full shadow-sm">
           <div className="w-full max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -362,7 +346,6 @@ export default function TambahNotulen() {
 
         <div className="w-full max-w-7xl mx-auto px-4 md:px-6 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* KOLOM KIRI */}
           <div className="lg:col-span-5 space-y-6">
             
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group">
@@ -433,7 +416,6 @@ export default function TambahNotulen() {
               </div>
             </div>
 
-            {/* AI NEURAL LINK - VERSI KUNING */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-16 h-16 bg-orange-50 rounded-bl-full -z-0"></div>
               
@@ -487,7 +469,6 @@ export default function TambahNotulen() {
             </div>
           </div>
 
-          {/* KOLOM KANAN: DASHBOARD OUTPUT */}
           <div className="lg:col-span-7 space-y-6">
             
             <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 shadow-sm relative overflow-hidden group">
