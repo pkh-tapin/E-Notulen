@@ -2,6 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+
+// =========================================================================
+// IMPORT FIREBASE REALTIME DATABASE 
+// Menggunakan node 'notes' agar sinkron dengan database asli Anda
+// =========================================================================
 import { ref, push, set, get, child, update } from 'firebase/database';
 import { db } from '../lib/firebase'; 
 
@@ -47,6 +52,21 @@ export default function TambahNotulen() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // =========================================================================
+  // SISTEM ANTI REFRESH / ANTI KELUAR HALAMAN
+  // =========================================================================
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Jika form sedang terisi sebagian, munculkan peringatan saat mau refresh
+      if (form.judul || form.isi_notulen || form.raw_transcript) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [form]);
+
   const detoxDB = (val: any) => {
     if (typeof val === 'string' && val.trim() === '[object Object]') return '';
     return val;
@@ -55,7 +75,6 @@ export default function TambahNotulen() {
   useEffect(() => {
     if (editId) {
       const dbRef = ref(db);
-      // PERBAIKAN: Membaca data edit dari 'notes'
       get(child(dbRef, `notes/${editId}`))
         .then((snapshot) => {
           if (snapshot.exists()) {
@@ -144,17 +163,14 @@ export default function TambahNotulen() {
         body: JSON.stringify({ audioBase64: base64, mimeType: 'audio/webm' })
       });
       
-      const resText = await transcribeRes.text();
-      let transcript = "";
-      try {
-        const parsed = JSON.parse(resText);
-        transcript = parsed.transcript || "";
-      } catch (e) {
-        throw new Error("Gagal membaca respons audio dari server.");
+      const resData = await transcribeRes.json();
+      
+      if (!transcribeRes.ok) {
+        throw new Error(resData.error || "Gagal memproses suara.");
       }
 
-      setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + transcript);
-      await processTranscript(transcript);
+      setField('raw_transcript', (form.raw_transcript ? form.raw_transcript + '\n\n' : '') + resData.transcript);
+      await processTranscript(resData.transcript);
     } catch (err: any) {
       showToast(`❌ ${err.message || 'Kesalahan Server'}`);
       setAiLoading(false);
@@ -162,11 +178,10 @@ export default function TambahNotulen() {
     }
   };
 
-  // SISTEM AI YANG AMAN: Menangkap respons dari analyze.ts tanpa hancur
   const processTranscript = async (transcript?: string) => {
     const txt = transcript || form.raw_transcript;
     if (!txt.trim()) {
-      showToast('⚠️ Transcript masih kosong. Isi atau rekam suara dulu!');
+      showToast('⚠️ Transcript masih kosong. Ketik isi atau rekam suara dulu!');
       return;
     }
 
@@ -186,28 +201,14 @@ export default function TambahNotulen() {
         })
       });
       
-      const rawTextResponse = await res.text();
-      let finalJudul = '', finalIsi = '', finalKesimpulan = '', finalTindakLanjut = '';
-      let cleanStr = rawTextResponse.replace(/```json/gi, '').replace(/```/gi, '').trim();
+      const resData = await res.json();
 
-      try {
-        const parsedData = JSON.parse(cleanStr);
-        finalJudul = parsedData.judul_saran || parsedData.judul || '';
-        finalIsi = parsedData.isi_notulen || parsedData.isi || '';
-        finalKesimpulan = parsedData.kesimpulan || '';
-        finalTindakLanjut = parsedData.tindak_lanjut || parsedData.tindaklanjut || '';
-      } catch (e1) {
-        const getMatch = (key: string) => {
-          const regex = new RegExp(`"${key}"\\s*:\\s*"([\\s\\S]*?)"(?:,"|}|\\n)`, 'i');
-          const match = cleanStr.match(regex);
-          return match ? match[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
-        };
-        finalJudul = getMatch('judul_saran') || getMatch('judul');
-        finalIsi = getMatch('isi_notulen') || getMatch('isi');
-        finalKesimpulan = getMatch('kesimpulan');
-        finalTindakLanjut = getMatch('tindak_lanjut') || getMatch('tindaklanjut');
-        if (!finalIsi) finalIsi = cleanStr;
+      if (!res.ok) {
+        throw new Error(resData.error || "Gagal terhubung ke AI server.");
       }
+
+      // Menangkap apabila format API mengembalikan {success: true, data: {...}} 
+      const finalData = resData.data || resData;
 
       const formatText = (val: any): string => {
         if (val === null || val === undefined) return '';
@@ -220,10 +221,10 @@ export default function TambahNotulen() {
 
       setForm(prev => ({
         ...prev,
-        judul: finalJudul ? formatText(finalJudul) : (prev.judul || 'Draft Otomatis AI'),
-        isi_notulen: finalIsi ? formatText(finalIsi) : prev.isi_notulen,
-        kesimpulan: finalKesimpulan ? formatText(finalKesimpulan) : prev.kesimpulan,
-        tindak_lanjut: finalTindakLanjut ? formatText(finalTindakLanjut) : prev.tindak_lanjut,
+        judul: finalData.judul || finalData.judul_saran ? formatText(finalData.judul || finalData.judul_saran) : prev.judul,
+        isi_notulen: finalData.isi_notulen || finalData.poin_penting ? formatText(finalData.isi_notulen || finalData.poin_penting) : prev.isi_notulen,
+        kesimpulan: finalData.kesimpulan || finalData.ringkasan ? formatText(finalData.kesimpulan || finalData.ringkasan) : prev.kesimpulan,
+        tindak_lanjut: finalData.tindak_lanjut ? formatText(finalData.tindak_lanjut) : prev.tindak_lanjut,
       }));
 
       showToast('✨ Blueprint AI Sukses Diekstraksi!');
@@ -266,11 +267,9 @@ export default function TambahNotulen() {
       let targetId = editId as string;
 
       if (isEdit && editId) {
-        // PERBAIKAN: Menyimpan hasil edit ke 'notes'
         const notulenRef = ref(db, `notes/${editId}`);
         await update(notulenRef, payload);
       } else {
-        // PERBAIKAN: Menyimpan data baru ke 'notes'
         const notulenListRef = ref(db, 'notes');
         const newNotulenRef = push(notulenListRef);
         targetId = newNotulenRef.key as string;
@@ -282,8 +281,9 @@ export default function TambahNotulen() {
       }
 
       showToast('✅ Tersimpan! Sinkronisasi Database Berhasil.');
-      console.log("SUKSES SINKRON FIREBASE NODE NOTES. ID:", targetId);
+      console.log("SUKSES SINKRON FIREBASE. ID:", targetId);
       
+      // Hapus pencegahan leave page setelah data aman tersimpan
       setTimeout(() => router.push(`/`), 1500);
       
     } catch (err: any) {
@@ -332,11 +332,12 @@ export default function TambahNotulen() {
               </div>
             </div>
             <div className="flex gap-3 items-center">
-              <button onClick={() => handleSave('draft')} disabled={saving}
+              {/* PERBAIKAN: type="button" untuk anti reload bawaan HTML */}
+              <button type="button" onClick={() => handleSave('draft')} disabled={saving}
                 className="hidden sm:block px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300">
                 Simpan Draft
               </button>
-              <button onClick={() => handleSave('final')} disabled={saving}
+              <button type="button" onClick={() => handleSave('final')} disabled={saving}
                 className="px-5 py-2.5 rounded-xl text-[10px] sm:text-xs font-extrabold uppercase tracking-wider transition-all bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md shadow-yellow-400/30 active:scale-95">
                 {saving ? 'Menyimpan...' : 'Deploy Final'}
               </button>
@@ -433,18 +434,18 @@ export default function TambahNotulen() {
               
               <div className="flex flex-col sm:flex-row gap-3 mb-5 relative z-10">
                 {!recording ? (
-                  <button onClick={startRecording} disabled={aiLoading}
+                  <button type="button" onClick={startRecording} disabled={aiLoading}
                     className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all bg-white border-2 border-orange-200 text-orange-600 hover:bg-orange-50 hover:border-orange-400 disabled:opacity-50">
                     🎙️ Rekam Audio
                   </button>
                 ) : (
-                  <button onClick={stopRecording}
+                  <button type="button" onClick={stopRecording}
                     className="flex-1 px-4 py-3.5 rounded-xl text-xs font-bold uppercase tracking-widest bg-red-50 border-2 border-red-500 text-red-600 animate-pulse">
                     ⏹️ Stop • {formatTime(recordingTime)}
                   </button>
                 )}
 
-                <button onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript.trim()}
+                <button type="button" onClick={() => processTranscript()} disabled={aiLoading || !form.raw_transcript.trim()}
                   className="flex-1 flex justify-center items-center gap-2 px-4 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all disabled:opacity-50 bg-slate-800 text-white hover:bg-slate-900 shadow-lg hover:shadow-xl active:scale-95">
                   {aiLoading ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -527,7 +528,7 @@ export default function TambahNotulen() {
                     </select>
                   </div>
                   
-                  <button onClick={() => handleSave()} disabled={saving}
+                  <button type="button" onClick={() => handleSave()} disabled={saving}
                     className="px-8 py-3.5 rounded-xl text-xs font-extrabold uppercase tracking-widest text-center transition-all bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md shadow-yellow-400/30 active:scale-95 disabled:opacity-50">
                     {saving ? 'Syncing...' : '💾 Simpan & Sinkron'}
                   </button>
