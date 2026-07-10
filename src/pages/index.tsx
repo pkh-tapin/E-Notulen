@@ -39,7 +39,6 @@ export default function DashboardPremium() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
-
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
@@ -104,7 +103,7 @@ export default function DashboardPremium() {
 
   const handleAdminToggle = () => {
     if (userRole !== 'public') {
-      setUserRole('public'); 
+      setUserRole('public');
       if (statusFilter === 'rahasia') setStatusFilter('all');
     } else {
       setShowPinModal(true);
@@ -154,7 +153,7 @@ export default function DashboardPremium() {
   };
 
   // =========================================================================
-  // REKAYASA TOTAL ENGINE CETAK PDF RESMI (ANTI-HANCUR)
+  // REKAYASA TOTAL ENGINE CETAK PDF RESMI (ANTI-HANCUR) - FIXED INDENTASI
   // =========================================================================
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
@@ -168,13 +167,22 @@ export default function DashboardPremium() {
       const text = Array.isArray(textData) ? textData.join('\n') : String(textData);
       
       return text.split('\n').map(line => {
-        const cleanLine = line.trim().replace(/\*/g, '');
-        if (!cleanLine) return '<div style="height: 12px;"></div>';
+        // Hapus regex yang membersihkan tanda bintang
+        const cleanLine = line;
+        if (!cleanLine.trim()) return '<div style="height: 12px;"></div>';
         
-        const isList = /^[0-9]+\.|^-|^[a-zA-Z]\./.test(cleanLine);
-        const padding = isList ? 'padding-left: 25px;' : 'padding-left: 0px;';
+        // Deteksi prefix dan indentasi
+        const leadingSpacesMatches = line.match(/^(\s*)/);
+        const leadingSpaces = leadingSpacesMatches ? leadingSpacesMatches[1].length : 0;
         
-        return `<p style="margin: 0 0 8px 0; text-align: justify; text-justify: inter-word; line-height: 1.6; ${padding}">${cleanLine}</p>`;
+        // Atur indentasi berdasarkan spasi di awal
+        const paddingLeft = leadingSpaces * 20; // 20px per indentation level
+
+        // Deteksi daftar bertingkat
+        const isList = /^\s*([0-9]+\.|^-|^[a-zA-Z]\.)/i.test(line);
+        const linePadding = isList ? 'padding-left: 25px;' : 'padding-left: 0px;';
+        
+        return `<p style="margin: 0 0 8px 0; text-align: justify; text-justify: inter-word; line-height: 1.6; ${linePadding} padding-left: ${paddingLeft}px;">${cleanLine.trim()}</p>`;
       }).join('');
     };
     
@@ -191,44 +199,44 @@ export default function DashboardPremium() {
           <h4 style="margin: 0 0 12px 0; font-size: 12pt; font-weight: bold; text-transform: uppercase;">I. DOKUMEN IDENTITAS KEGIATAN</h4>
           <table style="width: 100%; border-collapse: collapse; font-size: 12pt; table-layout: fixed;">
             <tr>
-              <td style="width: 28%; py: 4px; vertical-align: top;">Nama Kegiatan</td>
-              <td style="width: 3%; py: 4px; vertical-align: top; text-align: center;">:</td>
-              <td style="width: 69%; py: 4px; vertical-align: top; font-weight: bold; text-align: justify;">${item.judul || '-'}</td>
+              <td style="width: 28%; padding: 4px 0; vertical-align: top;">Nama Kegiatan</td>
+              <td style="width: 3%; padding: 4px 0; vertical-align: top; text-align: center;">:</td>
+              <td style="width: 69%; padding: 4px 0; vertical-align: top; font-weight: bold; text-align: justify;">${item.judul || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Hari / Tanggal</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px;">${item.tanggal || '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Hari / Tanggal</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">${item.tanggal || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Waktu Pelaksanaan</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'} WITA</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Waktu Pelaksanaan</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'} WITA</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Tempat / Lokasi</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px; text-align: justify;">${item.tempat || '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Tempat / Lokasi</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px; text-align: justify;">${item.tempat || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Pimpinan Rapat</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px;">${item.pimpinan_rapat || '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Pimpinan Rapat</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">${item.pimpinan_rapat || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Notulis</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px;">${item.notulis || '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Notulis</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">${item.notulis || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Agenda Pembahasan</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px; text-align: justify;">${item.agenda || '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Agenda Pembahasan</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px; text-align: justify;">${item.agenda || '-'}</td>
             </tr>
             <tr>
-              <td style="vertical-align: top; padding-top: 5px;">Daftar Hadir Peserta</td>
-              <td style="vertical-align: top; text-align: center; padding-top: 5px;">:</td>
-              <td style="vertical-align: top; padding-top: 5px; text-align: justify; word-wrap: break-word;">${item.peserta ? item.peserta.replace(/\n/g, ', ') : '-'}</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px;">Daftar Hadir Peserta</td>
+              <td style="vertical-align: top; padding: 4px 0; text-align: center; padding-top: 5px;">:</td>
+              <td style="vertical-align: top; padding: 4px 0; padding-top: 5px; text-align: justify; word-wrap: break-word;">${item.peserta ? item.peserta.replace(/\n/g, ', ') : '-'}</td>
             </tr>
           </table>
         </div>
@@ -271,7 +279,7 @@ export default function DashboardPremium() {
 
     const opt = {
       margin: [0, 0, 0, 0], 
-      filename: `OFFICIAL_NOTULEN_${item.tanggal}_${item.judul.substring(0, 20)}.pdf`,
+      filename: `OFFICIAL_NOTULEN_${item.tanggal}.pdf`,
       image: { type: 'jpeg', quality: 1.0 },
       html2canvas: { scale: 2.5, useCORS: true, letterRendering: true, logging: false },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
@@ -297,11 +305,11 @@ export default function DashboardPremium() {
       document.head.appendChild(script);
     } else runPDF();
   };
-  
+
   const hitungTotal = data.filter(d => isAdmin || d.status !== 'rahasia').length;
   const hitungFinal = data.filter(d => d.status === 'final').length;
   const hitungRahasia = data.filter(d => d.status === 'rahasia').length;
-  const hitungDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length; 
+  const hitungDraft = data.filter(d => d.status === 'draft' || d.status === 'review').length;
 
   return (
     <>
@@ -313,41 +321,41 @@ export default function DashboardPremium() {
       <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-800 pb-12 selection:bg-yellow-200 relative">
         
         {/* ========================================================= */}
-        {/* POP-UP DETAIL MODAL (PREVIEW) */}
+        {/* POP-UP DETAIL MODAL (PREVIEW) - FIXED MOBILE LAYOUT */}
         {/* ========================================================= */}
         {viewItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-white rounded-3xl w-full max-w-3xl relative overflow-hidden shadow-2xl my-auto flex flex-col max-h-[90vh]">
+          <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-full sm:max-w-3xl relative overflow-hidden shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[90vh] h-[90vh] sm:h-auto">
               
-              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <div className="px-5 py-4 sm:p-6 sm:py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
+                    <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                   </div>
                   <div>
-                    <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Detail Notulen Resmi</h2>
-                    <p className="text-xs text-slate-500">{viewItem.tanggal} • {viewItem.waktu_mulai || '-'} WITA</p>
+                    <h2 className="text-xs sm:text-sm font-extrabold text-slate-800 uppercase tracking-wide">Detail Notulen Resmi</h2>
+                    <p className="text-[10px] sm:text-xs text-slate-500">{viewItem.tanggal} • {viewItem.waktu_mulai || '-'} WITA</p>
                   </div>
                 </div>
-                <button onClick={() => setViewItem(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                <button onClick={() => setViewItem(null)} className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors">
+                  <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
               </div>
 
-              <div className="p-6 overflow-y-auto custom-scrollbar">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-800 mb-6 leading-snug">{viewItem.judul}</h1>
+              <div className="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1">
+                <h1 className="text-lg sm:text-2xl font-black text-slate-800 mb-6 leading-tight">{viewItem.judul}</h1>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div>
-                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Pimpinan Rapat</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-4 mb-8 p-4 sm:p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="border-b border-slate-100 sm:border-0 pb-3 sm:pb-0">
+                    <span className="block text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Pimpinan Rapat</span>
                     <span className="text-sm font-semibold text-slate-700">{viewItem.pimpinan_rapat || '-'}</span>
                   </div>
-                  <div>
-                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Lokasi</span>
+                  <div className="border-b border-slate-100 sm:border-0 pb-3 sm:pb-0">
+                    <span className="block text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Lokasi</span>
                     <span className="text-sm font-semibold text-slate-700">{viewItem.tempat || '-'}</span>
                   </div>
-                  <div className="sm:col-span-2">
-                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Agenda Utama</span>
+                  <div className="sm:col-span-2 pt-1 sm:pt-0">
+                    <span className="block text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Agenda Utama</span>
                     <span className="text-sm font-medium text-slate-700">{viewItem.agenda || '-'}</span>
                   </div>
                 </div>
@@ -357,17 +365,18 @@ export default function DashboardPremium() {
                     <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-500"></span> Hasil Pembahasan
                     </h3>
-                    <div className="text-sm text-slate-600 leading-loose whitespace-pre-wrap text-justify bg-white">
-                      {viewItem.isi_notulen || '-'}
+                    <div className="list-content text-sm text-slate-600 leading-loose whitespace-pre-wrap text-justify bg-white">
+                      {viewItem.isi_notulen ? formatModalListContent(viewItem.isi_notulen) : '-'}
                     </div>
                   </div>
                   
-                  <div className="p-5 rounded-2xl bg-yellow-50/50 border border-yellow-100">
+                  <div className="p-4 sm:p-5 rounded-2xl bg-yellow-50/50 border border-yellow-100">
                     <h3 className="text-xs font-extrabold uppercase tracking-widest text-yellow-800 mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Kesimpulan Eksekutif
                     </h3>
-                    <div className="text-sm text-yellow-900/80 leading-relaxed whitespace-pre-wrap">
-                      {viewItem.kesimpulan || viewItem.ai_structured?.ringkasan || '-'}
+                    <div className="list-content text-sm text-yellow-900/80 leading-relaxed whitespace-pre-wrap text-justify">
+                      {viewItem.kesimpulan || viewItem.ai_structured?.ringkasan ? 
+                        formatModalListContent(viewItem.kesimpulan || viewItem.ai_structured?.ringkasan || '') : '-'}
                     </div>
                   </div>
 
@@ -375,18 +384,19 @@ export default function DashboardPremium() {
                     <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Tindak Lanjut (RTL)
                     </h3>
-                    <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
-                      {viewItem.tindak_lanjut || viewItem.ai_structured?.tindak_lanjut || '-'}
+                    <div className="list-content text-sm text-slate-600 leading-relaxed whitespace-pre-wrap text-justify">
+                      {viewItem.tindak_lanjut || viewItem.ai_structured?.tindak_lanjut ?
+                        formatModalListContent(viewItem.tindak_lanjut || viewItem.ai_structured?.tindak_lanjut || '') : '-'}
                     </div>
                   </div>
                 </div>
               </div>
               
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0">
-                <button onClick={() => setViewItem(null)} className="px-6 py-2.5 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 transition-colors">Tutup</button>
+              <div className="px-5 py-4 sm:px-6 sm:py-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row justify-end gap-3 sticky bottom-0">
+                <button onClick={() => setViewItem(null)} className="w-full sm:w-auto px-6 py-2.5 sm:py-2.5 rounded-xl bg-slate-200 text-slate-700 text-xs sm:text-[11px] font-bold hover:bg-slate-300 transition-colors">Tutup</button>
                 <button 
                   onClick={() => handleCetakPDF(viewItem)}
-                  className="px-6 py-2.5 rounded-xl bg-yellow-400 text-yellow-950 text-xs font-bold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center gap-2"
+                  className="w-full sm:w-auto px-6 py-2.5 sm:py-2.5 rounded-xl bg-yellow-400 text-yellow-950 text-xs sm:text-[11px] font-bold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center justify-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
                   Cetak Dokumen Resmi
@@ -435,7 +445,7 @@ export default function DashboardPremium() {
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm border border-red-100 shadow-2xl">
               <h3 className="text-base font-extrabold text-red-600 mb-2 uppercase tracking-wide flex items-center gap-2">
-                Hapus Permanen Core Data?
+              Hapus Permanen Core Data?
               </h3>
               <p className="text-slate-500 text-sm leading-relaxed mb-6">Otorisasi Super Admin Terbaca. Tindakan ini tidak dapat dibatalkan.</p>
               <div className="flex gap-3">
@@ -670,12 +680,44 @@ export default function DashboardPremium() {
         </div>
       </div>
       
+      {/* ========================================================= */}
+      {/* FIXED MOBILE LIST INDENTATION CSS */}
+      {/* ========================================================= */}
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Indentasi manual untuk daftar bertingkat di mobile modal */
+        .list-content p { margin: 0 0 12px 0; text-align: justify; line-height: 1.8; }
+        .pre-indent-1 { padding-left: 20px; display: block; margin-left: -20px; }
+        .pre-indent-2 { padding-left: 40px; display: block; margin-left: -40px; }
+        .pre-indent-3 { padding-left: 60px; display: block; margin-left: -60px; }
+        .pre-indent-4 { padding-left: 80px; display: block; margin-left: -80px; }
       `}} />
     </>
   );
 }
+
+// Fungsi pembantu untuk memformat konten teks bertingkat di modal
+const formatModalListContent = (text: string) => {
+  return text.split('\n').map((line, index) => {
+    // Hapus regex yang membersihkan tanda bintang
+    const cleanLine = line;
+    if (!cleanLine.trim()) return <div key={index} style={{ height: '12px' }}></div>;
+    
+    // Deteksi prefix dan indentasi
+    const leadingSpacesMatches = line.match(/^(\s*)/);
+    const leadingSpaces = leadingSpacesMatches ? leadingSpacesMatches[1].length : 0;
+    
+    // Tentukan level indentasi (misalnya: 2 spasi per level)
+    const indentationLevel = Math.floor(leadingSpaces / 2);
+    
+    return (
+      <span key={index} className={`pre-indent-${indentationLevel}`}>
+        {cleanLine.trim()}
+      </span>
+    );
+  });
+};
