@@ -2,13 +2,13 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+  apiKey: "AIzaSyAp-8B3CXLQikB-8-b9-pKlqH2aTX-5lcU",
+  authDomain: "e-notulen-ecfd7.firebaseapp.com",
+  databaseURL: "https://e-notulen-ecfd7-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "e-notulen-ecfd7",
+  storageBucket: "e-notulen-ecfd7.firebasestorage.app",
+  messagingSenderId: "278047156272",
+  appId: "1:278047156272:web:73735a002662bee33525f5"
 };
 
 // Mencegah inisialisasi ganda saat Next.js melakukan re-render
