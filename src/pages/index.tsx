@@ -47,13 +47,15 @@ export default function DashboardPremium() {
   const itemsPerPage = 6; 
 
   const [printingId, setPrintingId] = useState<string | null>(null);
+  
+  // STATE BARU: Untuk menampilkan Pop-Up "Lihat Detail"
+  const [viewItem, setViewItem] = useState<Notulen | null>(null);
 
   // =========================================================================
   // BACA DATA DARI NODE 'notes'
   // =========================================================================
   useEffect(() => {
     setLoading(true);
-    // PERBAIKAN: Mengarah ke 'notes' sesuai database Bapak
     const notesRef = ref(db, 'notes');
     
     console.log("📡 Terhubung ke Firebase Node 'notes'...");
@@ -90,7 +92,7 @@ export default function DashboardPremium() {
 
       const matchSearch = (item.judul?.toLowerCase() || '').includes(searchTerm.toLowerCase()) || 
                           (item.agenda?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-                          (item.ai_structured?.ringkasan?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+                          (item.kesimpulan?.toLowerCase() || '').includes(searchTerm.toLowerCase());
       const matchStatus = statusFilter === 'all' || item.status === statusFilter;
       return matchSearch && matchStatus;
     });
@@ -125,7 +127,6 @@ export default function DashboardPremium() {
     if (!deleteId) return;
     setIsDeleting(true);
     try {
-      // PERBAIKAN: Menghapus data dari node 'notes'
       const targetRef = ref(db, `notes/${deleteId}`);
       await remove(targetRef);
       setDeleteId(null);
@@ -136,6 +137,9 @@ export default function DashboardPremium() {
     }
   };
 
+  // =========================================================================
+  // ENGINE PDF RESMI (Diperbaiki agar Rapi & Tidak Hancur)
+  // =========================================================================
   const handleCetakPDF = async (item: Notulen) => {
     setPrintingId(item.id);
     const printContainer = document.createElement('div');
@@ -143,80 +147,80 @@ export default function DashboardPremium() {
     printContainer.style.left = '-9999px';
     printContainer.style.top = '-9999px';
 
+    // Formatter khusus agar spasi & enter terbaca sempurna oleh html2pdf
     const formatHtmlPDF = (textData?: string | string[] | null) => {
-      let text = "";
-      if (Array.isArray(textData)) text = textData.join('\n');
-      else if (typeof textData === 'string') text = textData;
+      if (!textData) return '-';
+      const text = Array.isArray(textData) ? textData.join('\n') : String(textData);
       
-      if (!text || text.trim() === '') return '<div style="margin-bottom: 8px;">-</div>';
-      
-      return text.split('\n').filter(p => p.trim() !== '').map(p => {
-        let cleanText = p.replace(/\*/g, '').trim();
-        let isMainPoint = /^\d+\.\s/.test(cleanText);
-        let isSubPoint = /^[a-z]\.\s/i.test(cleanText) || cleanText.startsWith('-');
-        let paddingLeft = isSubPoint ? '28px' : '0px';
-        let fontWeight = isMainPoint ? 'bold' : 'normal';
-        let textTransform = isMainPoint ? 'uppercase' : 'none';
-        let marginTop = isMainPoint ? '14px' : '6px'; 
-
-        return `<div style="page-break-inside: avoid; margin-top: ${marginTop}; margin-bottom: 4px; text-align: justify; line-height: 1.6; padding-left: ${paddingLeft}; font-weight: ${fontWeight}; text-transform: ${textTransform};">${cleanText}</div>`;
+      return text.split('\n').map(line => {
+        const cleanLine = line.trim().replace(/\*/g, '');
+        if (!cleanLine) return '<div style="height: 10px;"></div>';
+        
+        // Deteksi jika baris adalah list/penomoran
+        const isList = /^[0-9]+\.|^-|^[a-zA-Z]\./.test(cleanLine);
+        const padding = isList ? 'padding-left: 20px;' : 'padding-left: 0px;';
+        
+        return `<div style="margin-bottom: 6px; text-align: justify; line-height: 1.5; ${padding}">${cleanLine}</div>`;
       }).join('');
     };
     
+    // Desain PDF Resmi: Menggunakan Times New Roman 12pt
     printContainer.innerHTML = `
-      <div id="print-capture-area" style="padding: 15mm 20mm; font-family: 'Arial', sans-serif; color: #000; background: #fff; width: 210mm; box-sizing: border-box;">
-        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 25px;">
-          <h1 style="margin: 0; font-size: 15pt; font-weight: bold; text-transform: uppercase;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
-          <h2 style="margin: 4px 0 0 0; font-size: 12pt; font-weight: bold;">SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
-          <p style="margin: 4px 0 0 0; font-size: 11pt; font-weight: bold;">KABUPATEN TAPIN</p>
+      <div id="print-capture-area" style="padding: 20mm; font-family: 'Times New Roman', Times, serif; color: #000; background: #fff; width: 210mm; box-sizing: border-box; line-height: 1.5;">
+        
+        <div style="text-align: center; border-bottom: 3px double #000; padding-bottom: 15px; margin-bottom: 25px;">
+          <h1 style="margin: 0; font-size: 14pt; font-weight: bold; text-transform: uppercase;">LAPORAN HASIL KEGIATAN & NOTULENSI</h1>
+          <h2 style="margin: 5px 0 0 0; font-size: 14pt; font-weight: bold; text-transform: uppercase;">SDM PROGRAM KELUARGA HARAPAN (PKH)</h2>
+          <h3 style="margin: 5px 0 0 0; font-size: 13pt; font-weight: bold; text-transform: uppercase;">KABUPATEN TAPIN</h3>
         </div>
 
-        <div style="margin-bottom: 22px; page-break-inside: avoid;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px;">I. Pembukaan & Identitas Rapat</h3>
-          <table style="width: 100%; border-collapse: collapse; font-size: 11pt;">
-            <tr><td style="width: 28%; padding: 4px 0; font-weight: bold;">Judul Kegiatan</td><td style="width: 3%;">:</td><td style="padding: 4px 0; font-weight: bold;">${item.judul || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold;">Hari, Tanggal</td><td>:</td><td style="padding: 4px 0;">${item.tanggal || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold;">Waktu Pelaksanaan</td><td>:</td><td style="padding: 4px 0;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold;">Tempat / Lokasi</td><td>:</td><td style="padding: 4px 0;">${item.tempat || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold;">Pimpinan Rapat</td><td>:</td><td style="padding: 4px 0;">${item.pimpinan_rapat || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold;">Notulis / Pencatat</td><td>:</td><td style="padding: 4px 0;">${item.notulis || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Peserta</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.peserta || '-'}</td></tr>
-            <tr><td style="padding: 4px 0; font-weight: bold; vertical-align: top;">Agenda</td><td style="vertical-align: top;">:</td><td style="padding: 4px 0; white-space: pre-wrap;">${item.agenda || '-'}</td></tr>
+        <div style="margin-bottom: 20px; page-break-inside: avoid; font-size: 12pt;">
+          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">I. IDENTITAS KEGIATAN</h4>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12pt; line-height: 1.5;">
+            <tr><td style="width: 25%; vertical-align: top;">Judul Kegiatan</td><td style="width: 3%; vertical-align: top;">:</td><td style="vertical-align: top; font-weight: bold;">${item.judul || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Tanggal</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.tanggal || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Waktu</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.waktu_mulai || '-'} s/d ${item.waktu_selesai || 'Selesai'}</td></tr>
+            <tr><td style="vertical-align: top;">Tempat</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.tempat || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Pimpinan Rapat</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.pimpinan_rapat || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Notulis</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.notulis || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Agenda Utama</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.agenda || '-'}</td></tr>
+            <tr><td style="vertical-align: top;">Peserta Hadir</td><td style="vertical-align: top;">:</td><td style="vertical-align: top;">${item.peserta ? item.peserta.replace(/\n/g, ', ') : '-'}</td></tr>
           </table>
         </div>
 
-        <div style="margin-bottom: 22px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #eab308; margin-bottom: 10px; page-break-inside: avoid;">II. Hasil Pembahasan / Notulensi</h3>
-          <div style="font-size: 11pt;">${formatHtmlPDF(item.isi_notulen)}</div>
+        <div style="margin-bottom: 20px; font-size: 12pt;">
+          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">II. HASIL PEMBAHASAN</h4>
+          ${formatHtmlPDF(item.isi_notulen)}
         </div>
 
-        <div style="margin-bottom: 22px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #ef4444; margin-bottom: 10px; page-break-inside: avoid;">III. Kesimpulan Eksekutif</h3>
-          <div style="padding: 12px; background-color: #fefce8; border: 1px solid #fef08a; border-radius: 6px; font-size: 11pt;">${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}</div>
+        <div style="margin-bottom: 20px; page-break-inside: avoid; font-size: 12pt;">
+          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">III. KESIMPULAN</h4>
+          ${formatHtmlPDF(item.kesimpulan || item.ai_structured?.ringkasan)}
         </div>
 
-        <div style="margin-bottom: 30px;">
-          <h3 style="font-size: 11pt; font-weight: bold; background-color: #f1f5f9; padding: 6px 10px; border-left: 4px solid #0f172a; margin-bottom: 10px; page-break-inside: avoid;">IV. Rencana Tindak Lanjut (RTL)</h3>
-          <div style="font-size: 11pt;">${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}</div>
+        <div style="margin-bottom: 40px; page-break-inside: avoid; font-size: 12pt;">
+          <h4 style="margin: 0 0 10px 0; font-size: 12pt; font-weight: bold;">IV. RENCANA TINDAK LANJUT</h4>
+          ${formatHtmlPDF(item.tindak_lanjut || item.ai_structured?.tindak_lanjut)}
         </div>
 
-        <div style="margin-top: 50px; text-align: right; page-break-inside: avoid;">
-          <div style="display: inline-block; text-align: center; width: 240px; font-size: 11pt;">
-            <p style="margin: 0 0 65px 0;">Tapin, ${item.tanggal || '-'}</p>
-            <p style="margin: 0; font-weight: bold; text-decoration: underline;">${item.pimpinan_rapat || '...........................................'}</p>
-            <p style="margin: 4px 0 0 0; font-size: 10pt;">Pimpinan Rapat</p>
+        <div style="width: 100%; display: flex; justify-content: flex-end; page-break-inside: avoid;">
+          <div style="width: 300px; text-align: center; font-size: 12pt; line-height: 1.5; float: right;">
+            <p style="margin: 0 0 80px 0;">Tapin, ${item.tanggal || '...........................'}</p>
+            <p style="margin: 0; font-weight: bold; text-decoration: underline;">${item.pimpinan_rapat || '...................................................'}</p>
+            <p style="margin: 0;">Pimpinan Rapat</p>
           </div>
+          <div style="clear: both;"></div>
         </div>
       </div>
     `;
     document.body.appendChild(printContainer);
 
     const opt = {
-      margin: [10, 0, 10, 0], 
-      filename: `NOTULEN_${item.tanggal}.pdf`,
-      image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 2, useCORS: true },
-      pagebreak: { mode: ['css'] },
+      margin: [10, 10, 15, 10], 
+      filename: `NOTULEN_${item.tanggal}_${item.judul.substring(0, 15)}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     };
 
@@ -252,10 +256,100 @@ export default function DashboardPremium() {
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0" />
       </Head>
 
-      <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-800 pb-12 selection:bg-yellow-200">
+      <div className="min-h-screen w-full bg-slate-50 font-sans text-slate-800 pb-12 selection:bg-yellow-200 relative">
         
+        {/* ========================================================= */}
+        {/* MODAL 'LIHAT DETAIL' - UI GLOSSY & PROFESIONAL */}
+        {/* ========================================================= */}
+        {viewItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-3xl w-full max-w-3xl relative overflow-hidden shadow-2xl my-auto flex flex-col max-h-[90vh]">
+              
+              {/* Header Modal */}
+              <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-yellow-100 flex items-center justify-center text-yellow-600">
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-extrabold text-slate-800 uppercase tracking-wide">Detail Notulen</h2>
+                    <p className="text-xs text-slate-500">{viewItem.tanggal} • {viewItem.waktu_mulai || '-'} WITA</p>
+                  </div>
+                </div>
+                <button onClick={() => setViewItem(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+              </div>
+
+              {/* Body Modal (Scrollable) */}
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 mb-6 leading-snug">{viewItem.judul}</h1>
+                
+                {/* Grid Identitas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Pimpinan Rapat</span>
+                    <span className="text-sm font-semibold text-slate-700">{viewItem.pimpinan_rapat || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Lokasi</span>
+                    <span className="text-sm font-semibold text-slate-700">{viewItem.tempat || '-'}</span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="block text-[10px] uppercase font-bold tracking-widest text-slate-400 mb-1">Agenda Utama</span>
+                    <span className="text-sm font-medium text-slate-700">{viewItem.agenda || '-'}</span>
+                  </div>
+                </div>
+
+                {/* Konten Utama */}
+                <div className="space-y-8">
+                  <div>
+                    <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span> Hasil Pembahasan
+                    </h3>
+                    <div className="text-sm text-slate-600 leading-loose whitespace-pre-wrap text-justify bg-white">
+                      {viewItem.isi_notulen || '-'}
+                    </div>
+                  </div>
+                  
+                  <div className="p-5 rounded-2xl bg-yellow-50/50 border border-yellow-100">
+                    <h3 className="text-xs font-extrabold uppercase tracking-widest text-yellow-800 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Kesimpulan Eksekutif
+                    </h3>
+                    <div className="text-sm text-yellow-900/80 leading-relaxed whitespace-pre-wrap">
+                      {viewItem.kesimpulan || viewItem.ai_structured?.ringkasan || '-'}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-800 mb-3 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Tindak Lanjut (RTL)
+                    </h3>
+                    <div className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                      {viewItem.tindak_lanjut || viewItem.ai_structured?.tindak_lanjut || '-'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Footer Modal */}
+              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 sticky bottom-0">
+                <button onClick={() => setViewItem(null)} className="px-6 py-2.5 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 transition-colors">Tutup</button>
+                <button 
+                  onClick={() => handleCetakPDF(viewItem)}
+                  className="px-6 py-2.5 rounded-xl bg-yellow-400 text-yellow-950 text-xs font-bold hover:bg-yellow-500 transition-colors shadow-lg shadow-yellow-400/20 flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                  Cetak PDF Resmi
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Modal Admin Auth */}
         {showPinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-7 w-full max-w-sm relative overflow-hidden shadow-2xl border border-slate-100">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-yellow-400"></div>
               <div className="flex justify-between items-center mb-6">
@@ -277,7 +371,7 @@ export default function DashboardPremium() {
                   placeholder="••••"
                 />
                 {pinError && <p className="text-red-500 text-xs mb-4 text-center font-bold">{pinError}</p>}
-                <button type="submit" className="w-full py-3.5 bg-yellow-400 text-yellow-950 rounded-xl hover:bg-yellow-500 transition-all font-extrabold text-xs tracking-widest shadow-lg shadow-yellow-400/30">
+                <button type="submit" className="w-full py-3.5 bg-yellow-400 text-yellow-950 rounded-xl hover:bg-yellow-50 transition-all font-extrabold text-xs tracking-widest shadow-lg shadow-yellow-400/30">
                   BUKA BRANKAS
                 </button>
               </form>
@@ -285,8 +379,9 @@ export default function DashboardPremium() {
           </div>
         )}
 
+        {/* Modal Delete */}
         {deleteId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-6 w-full max-w-sm border border-red-100 shadow-2xl">
               <h3 className="text-base font-extrabold text-red-600 mb-2 uppercase tracking-wide flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
@@ -303,6 +398,7 @@ export default function DashboardPremium() {
           </div>
         )}
 
+        {/* NAVBAR */}
         <nav className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 w-full shadow-sm">
           <div className="w-full max-w-7xl mx-auto px-4 md:px-6 h-16 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -315,7 +411,7 @@ export default function DashboardPremium() {
             <div className="flex gap-3 items-center">
               <Link href="/tambah" className="px-4 py-2.5 bg-yellow-400 rounded-xl text-yellow-950 font-extrabold text-[10px] sm:text-xs uppercase tracking-wider hover:bg-yellow-500 transition-all shadow-md shadow-yellow-400/30 flex items-center gap-1.5">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
-                <span>Buat Baru</span>
+                <span className="hidden sm:inline">Buat Baru</span>
               </Link>
               <button 
                 onClick={handleAdminToggle} 
@@ -334,6 +430,7 @@ export default function DashboardPremium() {
 
         <div className="w-full max-w-7xl mx-auto px-4 md:px-6 mt-8">
           
+          {/* STATISTIK GRID */}
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
               <div className="absolute top-0 right-0 w-16 h-16 bg-slate-50 rounded-bl-full -mr-8 -mt-8"></div>
@@ -453,9 +550,13 @@ export default function DashboardPremium() {
 
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <div className="flex gap-2.5">
-                      <Link href={`/tambah?edit=${item.id}`} className="flex-1 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5">
-                        Buka Detail
-                      </Link>
+                      {/* TOMBOL LIHAT DETAIL (MEMBUKA MODAL) */}
+                      <button 
+                        onClick={() => setViewItem(item)} 
+                        className="flex-1 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-[11px] font-bold text-center hover:bg-slate-100 hover:border-slate-300 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        Lihat Detail
+                      </button>
                       <button 
                         onClick={() => handleCetakPDF(item)}
                         disabled={printingId === item.id}
@@ -494,6 +595,24 @@ export default function DashboardPremium() {
 
         </div>
       </div>
+      
+      {/* Tambahkan style untuk custom scrollbar pada modal */}
+      <style dangerouslySetInnerHTML={{__html: `
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9; 
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1; 
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8; 
+        }
+      `}} />
     </>
   );
 }
