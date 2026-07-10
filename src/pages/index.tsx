@@ -56,40 +56,42 @@ export default function DashboardPremium() {
   // =========================================================================
   // SINKRONISASI REALTIME DENGAN FIREBASE
   // =========================================================================
+ // =========================================================================
+  // SINKRONISASI REALTIME DENGAN FIREBASE (DENGAN RADAR DEBUG)
+  // =========================================================================
   useEffect(() => {
     setLoading(true);
     const notulenRef = ref(db, 'notulen');
     
-    // onValue akan terus mendengarkan perubahan data secara realtime
+    console.log("📡 Mencoba terhubung ke Firebase..."); // Radar 1
+    
     const unsubscribe = onValue(notulenRef, (snapshot) => {
+      console.log("📥 Respon dari Firebase:", snapshot.val()); // Radar 2
+
       if (snapshot.exists()) {
         const dataObj = snapshot.val();
-        
-        // Ubah object Firebase menjadi array
         const formattedData = Object.keys(dataObj).map(key => ({
           id: key,
           ...dataObj[key]
         })) as Notulen[];
 
-        // Urutkan berdasarkan tanggal terbaru
         const sortedData = formattedData.sort((a, b) => {
           return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
         });
         
         setData(sortedData);
       } else {
-        setData([]); // Jika database kosong
+        console.log("⚠️ Database terhubung, tapi folder 'notulen' masih KOSONG.");
+        setData([]); 
       }
       setLoading(false);
     }, (error) => {
-      console.error("Gagal sinkronisasi dari Firebase:", error);
+      console.error("❌ GAGAL SINKRON:", error); // Radar 3 (Akan menangkap error jika Vercel gagal)
       setLoading(false);
     });
 
-    // Cleanup listener
     return () => unsubscribe();
   }, []);
-
   // =========================================================================
   // SISTEM FILTER KHUSUS ADMIN (TIDAK BISA DITEMBUS TANPA PIN)
   // =========================================================================
